@@ -2,34 +2,61 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Inventory Multi-Signature Query</title>
+  <title>Warehouse Query - Task 3</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 2rem; }
-    label, select, button { margin-top: 1rem; display: block; }
-    table { margin-top: 2rem; border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    th { background-color: #f5f5f5; }
-    pre { background: #f0f0f0; padding: 1rem; overflow-x: auto; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      padding: 2rem;
+      background: #f8f8f8;
+      color: #333;
+    }
+    label, select, button {
+      display: block;
+      margin-top: 1rem;
+      font-size: 1rem;
+    }
+    table {
+      margin-top: 1.5rem;
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.95rem;
+    }
+    th, td {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: center;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+    pre {
+      background: #eee;
+      padding: 1rem;
+      border-radius: 6px;
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
-  <h1>Inventory Multi-Signature Query</h1>
-  <label for="itemId">Select Item ID:</label>
+  <h2>📦 Task 3 - Inventory Query & Signature Check</h2>
+
+  <label for="itemId">Pick an item to check:</label>
   <select id="itemId">
     <option value="001">Item 001</option>
     <option value="002">Item 002</option>
     <option value="003">Item 003</option>
     <option value="004">Item 004</option>
   </select>
-  <button onclick="queryItem()">Submit Query</button>
 
-  <div id="output"></div>
+  <button onclick="queryItem()">Submit</button>
+
+  <div id="output" style="margin-top:2rem;"></div>
 
   <script>
     async function queryItem() {
       const itemId = document.getElementById('itemId').value;
       const output = document.getElementById('output');
-      output.innerHTML = '<p>Querying...</p>';
+      output.innerHTML = 'Just a moment...';
 
       try {
         const res = await fetch('http://localhost:5000/query_item', {
@@ -45,71 +72,68 @@
           return;
         }
 
+        const tableRows = data.warehouses.map(w => `
+          <tr>
+            <td>${w.warehouse}</td>
+            <td>${w.ID}</td>
+            <td>${w.r}</td>
+            <td>${w.g}</td>
+            <td>${w.t_i}</td>
+            <td>${w.s_i}</td>
+          </tr>`).join('');
+
         output.innerHTML = `
-          <h3>Item Info</h3>
+          <h3>🧾 Item Info</h3>
           <p><strong>ID:</strong> ${data.itemId}</p>
           <p><strong>Quantity:</strong> ${data.item.qty}</p>
           <p><strong>Price:</strong> $${data.item.price}</p>
           <p><strong>Location:</strong> ${data.item.location}</p>
 
-          <h3>Warehouse Signature Details</h3>
+          <h3>🏬 Warehouse Signature Breakdown</h3>
           <table>
             <tr>
               <th>Warehouse</th>
               <th>ID</th>
               <th>r</th>
-              <th>g</th>
+              <th>gᵢ</th>
               <th>tᵢ</th>
               <th>sᵢ</th>
             </tr>
-            ${data.warehouses.map(w => `
-              <tr>
-                <td>${w.warehouse}</td>
-                <td>${w.ID}</td>
-                <td>${w.r}</td>
-                <td>${w.g}</td>
-                <td>${w.t_i}</td>
-                <td>${w.s_i}</td>
-              </tr>`).join('')}
+            ${tableRows}
           </table>
 
-          <h3>Verification Summary</h3>
+          <h3>🧠 Signature & RSA Breakdown</h3>
           <pre>
-Step a. Response message encrypted by PKG using RSA public key:
-Encrypted Quantity:
+Step a: Encrypted by PKG (RSA public key)
   - Decimal: ${data.encrypted_quantity}
-  - Hex: ${BigInt(data.encrypted_quantity).toString(16)}
+  - Hex: 0x${BigInt(data.encrypted_quantity).toString(16)}
 
-Step b. Encrypted message + multi-signature parameters sent to the user:
+Step b: Sent to user with multi-signature details
   - Signature (s):
       - Decimal: ${data.signature}
-      - Hex: ${BigInt(data.signature).toString(16)}
+      - Hex: 0x${BigInt(data.signature).toString(16)}
   - Aggregated t:
       - Decimal: ${data.t}
-      - Hex: ${BigInt(data.t).toString(16)}
-  - Hash (h):
+      - Hex: 0x${BigInt(data.t).toString(16)}
+  - Hash h(t, m):
       - Decimal: ${data.hash}
-      - Hex: ${BigInt(data.hash).toString(16)}
+      - Hex: 0x${BigInt(data.hash).toString(16)}
 
-Step c. The user (Procurement Officer) decrypts the message using their RSA private key:
-Decrypted Quantity:
+Step c: Decrypted by Procurement Officer
   - Decimal: ${data.decrypted_quantity}
-  - Hex: ${BigInt(data.decrypted_quantity).toString(16)}
+  - Hex: 0x${BigInt(data.decrypted_quantity).toString(16)}
 
-Step d. The user verifies the multi-signature:
-Computed LHS = s^e mod n:
-  - Decimal: ${data.lhs}
-  - Hex: ${BigInt(data.lhs).toString(16)}
+Step d: Signature Verification
+  - LHS = s^e mod n = ${data.lhs}
+      → Hex: 0x${BigInt(data.lhs).toString(16)}
+  - RHS = ID₁⋅ID₂⋅...⋅t^h mod n = ${data.rhs}
+      → Hex: 0x${BigInt(data.rhs).toString(16)}
 
-Computed RHS = ∏ID × t^h mod n:
-  - Decimal: ${data.rhs}
-  - Hex: ${BigInt(data.rhs).toString(16)}
-
-Signature verification result: ${data.valid ? '✅ VALID' : '❌ INVALID'}
+✅ Signature check result: ${data.valid ? "VALID ✅" : "INVALID ❌"}
           </pre>
         `;
       } catch (err) {
-        output.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
+        output.innerHTML = `<p style="color:red">Error while querying: ${err.message}</p>`;
       }
     }
   </script>
