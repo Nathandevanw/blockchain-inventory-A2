@@ -1,139 +1,147 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import json
 import hashlib
 
 app = Flask(__name__)
 CORS(app)
 
-# Load key data from file
-with open("C:\\Users\\thaiv\\Downloads\\blockchain_inventory_final_with_keys\\backend_part2\\all_keys.json") as f:
-    keys = json.load(f)
+# ===== HARN + RSA PARAMETERS (hardcoded from ListOfKeys) =====
+# PKG keys (public and private)
+p_pkg = 1004162036461488639338597000466705179253226703
+q_pkg = 950133741151267522116252385927940618264103623
+e_pkg = 973028207197278907211
+n_pkg = p_pkg * q_pkg
+phi_pkg = (p_pkg - 1) * (q_pkg - 1)
+d_pkg = pow(e_pkg, -1, phi_pkg)
 
-inventories = keys["Inventories"]
-harn = keys["HarnKeys"]
-IDs = harn["IDs"]
-Randoms = harn["Randoms"]
+# Procurement Officer RSA keys
+po_p = 1080954735722463992988394149602856332100628417
+po_q = 1158106283320086444890911863299879973542293243
+po_e = 106506253943651610547613
+po_n = po_p * po_q
+po_phi = (po_p - 1) * (po_q - 1)
+po_d = pow(po_e, -1, po_phi)
 
-# Hardcoded inventory records: each warehouse stores the same item info
-inventory_items = {
+# Identity and randoms per warehouse
+IDs = {
+    "Inventory_A": 126,
+    "Inventory_B": 127,
+    "Inventory_C": 128,
+    "Inventory_D": 129
+}
+
+Randoms = {
+    "Inventory_A": 621,
+    "Inventory_B": 721,
+    "Inventory_C": 821,
+    "Inventory_D": 921
+}
+
+# Simulated database: every warehouse has the same info
+item_db = {
     "001": {"qty": 32, "price": 12, "location": "D"},
     "002": {"qty": 20, "price": 14, "location": "C"},
     "003": {"qty": 22, "price": 16, "location": "B"},
     "004": {"qty": 12, "price": 18, "location": "A"}
 }
 
+warehouses = ["Inventory_A", "Inventory_B", "Inventory_C", "Inventory_D"]
+
+def md5_hash(value):
+    return int(hashlib.md5(str(value).encode()).hexdigest(), 16)
+
+def rsa_encrypt(msg, e, n):
+    m = int.from_bytes(str(msg).encode(), 'big')
+    return pow(m, e, n)
+
+def rsa_decrypt(c, d, n):
+    m = pow(c, d, n)
+    return int.from_bytes(m.to_bytes((m.bit_length() + 7) // 8, 'big'), 'big')
+
 def powmod(x, y, z):
     return pow(x, y, z)
 
-def generate_g(ID, d, n):
-    return powmod(ID, d, n)  # g = ID^d mod n
+def generate_g(ID):
+    return powmod(ID, d_pkg, n_pkg)
 
-def generate_t(r, e, n):
-    return powmod(r, e, n)  # t = r^e mod n
+def generate_t(r):
+    return powmod(r, e_pkg, n_pkg)
 
-def compute_t(t_list, n):
-    t = 1
-    for val in t_list:
-        t = (t * val) % n
-    return t  # combined t = ∏tᵢ mod n
+def compute_aggregate_t(t_list):
+    result = 1
+    for t in t_list:
+        result = (result * t) % n_pkg
+    return result
 
-def hash_tm(t, message):
-    h = hashlib.md5((str(t) + str(message)).encode()).hexdigest()
-    return int(h, 16)  # H(t || m)
+def compute_aggregate_s(s_list):
+    result = 1
+    for s in s_list:
+        result = (result * s) % n_pkg
+    return result
 
-def generate_s(g, r, h, n):
-    return (g * powmod(r, h, n)) % n  # s = g * r^h mod n
-
-def aggregate_s(s_list, n):
-    s = 1
-    for si in s_list:
-        s = (s * si) % n
-    return s  # aggregated s = ∏sᵢ mod n
-
-def verify_signature(s, e, n, ids, t, h):
-    lhs = powmod(s, e, n)
+def verify_signature(s, t, h):
+    lhs = powmod(s, e_pkg, n_pkg)
     id_product = 1
-    for ID in ids:
-        id_product = (id_product * ID) % n
-    rhs = (id_product * powmod(t, h, n)) % n
-    return lhs == rhs  # s^e == ID_product * t^h mod n
-
-def rsa_encrypt(message, e, n):
-    m = int.from_bytes(str(message).encode(), 'big')
-    return powmod(m, e, n)  # ciphertext = m^e mod n
-
-def rsa_decrypt(cipher, d, n):
-    m = powmod(cipher, d, n)
-    return int.from_bytes(m.to_bytes((m.bit_length() + 7) // 8, 'big'), 'big')
+    for ID in IDs.values():
+        id_product = (id_product * ID) % n_pkg
+    rhs = (id_product * powmod(t, h, n_pkg)) % n_pkg
+    return lhs == rhs
 
 @app.route("/query_item", methods=["POST"])
-def query_item():
+def query():
     item_id = request.json.get("item_id")
-    item_info = inventory_items.get(item_id)
-    if not item_info:
-        return jsonify({"error": "Item ID not found."}), 404
+    item = item_db.get(item_id)
+    if not item:
+        return jsonify({"error": "Item ID not found"}), 404
 
-    qty = item_info["qty"]
+    # === Signature Phase ===
+    g_list, t_list, s_list = [], [], []
+    h = None
+    result_details = []
 
-    # === Begin Harn Signature Process ===
-    # PKG RSA public key (used for signature verification and encryption)
-    e_pkg = harn["PKG"]["e"]
-    n_pkg = harn["PKG"]["n"]
-
-    t_list, s_list, inventory_data = [], [], []
-
-    for name in inventories:
+    for name in warehouses:
         ID = IDs[name]
-        d = inventories[name]["d"]  # each inventory has its own private key dᵢ
-        n = inventories[name]["n"]  # each inventory has its own modulus nᵢ
         r = Randoms[name]
+        g = generate_g(ID)
+        t = generate_t(r)
 
-        g = generate_g(ID, d, n)
-        t = generate_t(r, e_pkg, n)
+        g_list.append(g)
         t_list.append(t)
 
-        inventory_data.append({
-            "inventory": name,
+        result_details.append({
+            "warehouse": name,
             "ID": ID,
             "r": r,
             "g": g,
-            "t_i": t,
-            "quantity": qty,
-            "price": item_info["price"],
-            "location": item_info["location"]
+            "t_i": t
         })
 
-    t = compute_t(t_list, n_pkg)
-    h = hash_tm(t, qty)
+    t = compute_aggregate_t(t_list)
+    h = md5_hash(str(t) + str(item["qty"]))
 
-    for idx, name in enumerate(inventories):
+    for i, name in enumerate(warehouses):
         r = Randoms[name]
-        g = inventory_data[idx]["g"]
-        n = inventories[name]["n"]
-        s_i = generate_s(g, r, h, n)
+        s_i = (g_list[i] * powmod(r, h, n_pkg)) % n_pkg
         s_list.append(s_i)
-        inventory_data[idx]["s_i"] = s_i
+        result_details[i]["s_i"] = s_i
 
-    sig = aggregate_s(s_list, n_pkg)
-    ids = list(IDs.values())
-    verified = verify_signature(sig, e_pkg, n_pkg, ids, t, h)
+    s = compute_aggregate_s(s_list)
+    valid = verify_signature(s, t, h)
 
-    # === Encrypt the quantity using PKG public key ===
-    enc = rsa_encrypt(qty, e_pkg, n_pkg)
-    # === Simulate decryption with PKG private key ===
-    dec = rsa_decrypt(enc, harn["PKG"]["d"], n_pkg)
+    # === Encrypt response using Procurement Officer's public key ===
+    encrypted = rsa_encrypt(item["qty"], po_e, po_n)
+    decrypted = rsa_decrypt(encrypted, po_d, po_n)
 
     return jsonify({
         "itemId": item_id,
-        "item": item_info,
-        "multi_signature": str(sig),
+        "item": item,
+        "signature": str(s),
         "t": str(t),
         "hash": str(h),
-        "encrypted_quantity": str(enc),
-        "decrypted_quantity": str(dec),
-        "verification": verified,
-        "inventory_nodes": inventory_data
+        "valid": valid,
+        "encrypted_quantity": str(encrypted),
+        "decrypted_quantity": str(decrypted),
+        "warehouses": result_details
     })
 
 if __name__ == "__main__":
