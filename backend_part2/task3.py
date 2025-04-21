@@ -15,33 +15,17 @@ harn = keys["HarnKeys"]
 IDs = harn["IDs"]
 Randoms = harn["Randoms"]
 
-# Fully accurate database from visual diagram
-# Match: ID, QTY, Price, Location
-inventory_db = {
-    "001": {
-        "Inventory_A": {"qty": 32, "price": 12, "location": "D"},
-        "Inventory_B": {"qty": 32, "price": 12, "location": "D"},
-        "Inventory_C": {"qty": 32, "price": 12, "location": "D"},
-        "Inventory_D": {"qty": 32, "price": 12, "location": "D"}
-    },
-    "002": {
-        "Inventory_A": {"qty": 20, "price": 14, "location": "C"},
-        "Inventory_B": {"qty": 20, "price": 14, "location": "C"},
-        "Inventory_C": {"qty": 20, "price": 14, "location": "C"},
-        "Inventory_D": {"qty": 20, "price": 14, "location": "C"}
-    },
-    "003": {
-        "Inventory_A": {"qty": 22, "price": 16, "location": "B"},
-        "Inventory_B": {"qty": 22, "price": 16, "location": "B"},
-        "Inventory_C": {"qty": 22, "price": 16, "location": "B"},
-        "Inventory_D": {"qty": 22, "price": 16, "location": "B"}
-    },
-    "004": {
-        "Inventory_A": {"qty": 12, "price": 18, "location": "A"},
-        "Inventory_B": {"qty": 12, "price": 18, "location": "A"},
-        "Inventory_C": {"qty": 12, "price": 18, "location": "A"},
-        "Inventory_D": {"qty": 12, "price": 18, "location": "A"}
-    }
+# PKG Key Setup: using values of p, q, and e from the key list
+# These values are already precomputed in 'all_keys.json' and include RSA n and d
+# Example: n = p * q, d = e^-1 mod (p-1)(q-1)
+# They are hardcoded for all identities to match assignment requirements
+
+# Inventory item data: same quantity, price, location across all inventory nodes
+inventory_items = {
+    "001": {"qty": 32, "price": 12, "location": "D"},
+    "002": {"qty": 20, "price": 14, "location": "C"},
+    "003": {"qty": 22, "price": 16, "location": "B"},
+    "004": {"qty": 12, "price": 18, "location": "A"}
 }
 
 def powmod(x, y, z):
@@ -91,15 +75,16 @@ def rsa_decrypt(cipher, d, n):
 @app.route("/query_item", methods=["POST"])
 def query_item():
     item_id = request.json.get("item_id")
-    record = inventory_db.get(item_id)
-    if not record:
-        return jsonify({"error": "Item ID not found in inventory database."}), 404
+    item_info = inventory_items.get(item_id)
+    if not item_info:
+        return jsonify({"error": "Item ID not found."}), 404
 
-    total = sum([inv["qty"] for inv in record.values()])
-    e_pkg = harn["PKG"]["e"]
-    n_pkg = harn["PKG"]["n"]
+    qty = item_info["qty"]
+    e_pkg = harn["PKG"]["e"]  # RSA public key
+    n_pkg = harn["PKG"]["n"]  # RSA modulus (n = p * q)
     t_list, s_list, inventory_data = [], [], []
 
+    # Generate signature components for each inventory node
     for name in inventories:
         ID = IDs[name]
         d = inventories[name]["d"]
@@ -110,20 +95,20 @@ def query_item():
         t = generate_t(r, e_pkg, n)
         t_list.append(t)
 
-        inv_info = record[name]
         inventory_data.append({
             "inventory": name,
             "ID": ID,
             "r": r,
             "g": g,
             "t_i": t,
-            "quantity": inv_info["qty"],
-            "price": inv_info["price"],
-            "location": inv_info["location"]
+            "quantity": qty,
+            "price": item_info["price"],
+            "location": item_info["location"]
         })
 
+    # Compute combined t and hash
     t = compute_t(t_list, n_pkg)
-    h = hash_tm(t, total)
+    h = hash_tm(t, qty)
 
     for idx, name in enumerate(inventories):
         r = Randoms[name]
@@ -134,24 +119,23 @@ def query_item():
         inventory_data[idx]["s_i"] = s_i
 
     sig = aggregate_s(s_list, n_pkg)
-
-    po = harn["ProcurementOfficer"]
-    enc = rsa_encrypt(total, po["e"], po["n"])
-    dec = rsa_decrypt(enc, po["d"], po["n"])
-
     ids = list(IDs.values())
     verified = verify_signature(sig, e_pkg, n_pkg, ids, t, h)
 
+    # Encrypt total using PKG's RSA public key
+    enc = rsa_encrypt(qty, e_pkg, n_pkg)
+    dec = rsa_decrypt(enc, harn["PKG"]["d"], n_pkg)  # For verification simulation only
+
     return jsonify({
         "itemId": item_id,
-        "total_quantity": total,
+        "item": item_info,
         "multi_signature": str(sig),
         "t": str(t),
         "hash": str(h),
         "encrypted_quantity": str(enc),
         "decrypted_quantity": str(dec),
         "verification": verified,
-        "details": inventory_data
+        "inventory_nodes": inventory_data
     })
 
 if __name__ == "__main__":
