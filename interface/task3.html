@@ -1,91 +1,89 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Task 3 Multi-Signature Query</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory Verification - Task 3</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #f2f2f2; padding: 40px; }
-    .container { background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); max-width: 800px; margin: auto; }
-    h2 { text-align: center; }
-    select, button { width: 100%; padding: 10px; margin-top: 10px; font-size: 1em; }
-    table { width: 100%; margin-top: 20px; border-collapse: collapse; background: #eef; }
+    body { font-family: Arial, sans-serif; padding: 2rem; }
+    label, select, button { margin-top: 1rem; display: block; }
+    table { margin-top: 2rem; border-collapse: collapse; width: 100%; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    th { background: #ddd; }
-    pre { background: #eef; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
+    th { background-color: #f5f5f5; }
+    pre { background: #f0f0f0; padding: 1rem; overflow-x: auto; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>🔐 Task 3 – Multi-Signature Query</h2>
-    <label for="itemId">Select Item ID:</label>
-    <select id="itemId">
-      <option value="001">001</option>
-      <option value="002">002</option>
-      <option value="003">003</option>
-      <option value="004">004</option>
-    </select>
-    <button onclick="submitQuery()">Submit Query</button>
+  <h1>Inventory Multi-Signature Query</h1>
+  <label for="itemId">Select Item ID:</label>
+  <select id="itemId">
+    <option value="001">Item 001</option>
+    <option value="002">Item 002</option>
+    <option value="003">Item 003</option>
+    <option value="004">Item 004</option>
+  </select>
+  <button onclick="queryItem()">Submit Query</button>
 
-    <div id="output">
-      <pre>Waiting for input...</pre>
-    </div>
-  </div>
+  <div id="output"></div>
 
   <script>
-    async function submitQuery() {
-      const itemId = document.getElementById("itemId").value;
-      const output = document.getElementById("output");
-      output.innerHTML = '<pre>Loading...</pre>';
+    async function queryItem() {
+      const itemId = document.getElementById('itemId').value;
+      const output = document.getElementById('output');
+      output.innerHTML = '<p>Querying...</p>';
 
       try {
-        const res = await fetch("http://localhost:5000/query_item", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('http://localhost:5000/query_item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ item_id: itemId })
         });
 
-        if (!res.ok) throw new Error("Failed to connect to Flask backend");
-
         const data = await res.json();
 
-        let inventoryRows = "";
-        data.details.forEach(inv => {
-          inventoryRows += `
-            <tr>
-              <td>${inv.inventory}</td>
-              <td>${inv.ID}</td>
-              <td>${inv.r}</td>
-              <td>${inv.quantity}</td>
-              <td>${inv.t_i}</td>
-              <td>${inv.s_i}</td>
-            </tr>`;
-        });
+        if (data.error) {
+          output.innerHTML = `<p style="color:red">${data.error}</p>`;
+          return;
+        }
 
         output.innerHTML = `
-          <h3>Inventory Breakdown</h3>
+          <h3>Item Info</h3>
+          <p><strong>ID:</strong> ${data.itemId}</p>
+          <p><strong>Quantity:</strong> ${data.item.qty}</p>
+          <p><strong>Price:</strong> $${data.item.price}</p>
+          <p><strong>Location:</strong> ${data.item.location}</p>
+
+          <h3>Inventory Nodes</h3>
           <table>
-            <thead>
+            <tr>
+              <th>Inventory</th>
+              <th>gᵢ</th>
+              <th>tᵢ</th>
+              <th>sᵢ</th>
+            </tr>
+            ${data.inventory_nodes.map(inv => `
               <tr>
-                <th>Inventory</th><th>ID</th><th>r</th><th>Quantity</th><th>tᵢ</th><th>σᵢ</th>
+                <td>${inv.inventory}</td>
+                <td>${inv.g}</td>
+                <td>${inv.t_i}</td>
+                <td>${inv.s_i}</td>
               </tr>
-            </thead>
-            <tbody>${inventoryRows}</tbody>
+            `).join('')}
           </table>
-          <h3>Results</h3>
+
+          <h3>Multi-Signature Verification</h3>
           <pre>
-Item ID:              ${data.itemId}
-Total Quantity:       ${data.total_quantity}
-Multi-Signature (σ):  ${data.multi_signature}
-Commitment (t):       ${data.t}
-Hash H(t, m):         ${data.hash}
-Encrypted Quantity:   ${data.encrypted_quantity}
-Decrypted Quantity:   ${data.decrypted_quantity}
-Signature Verified:   ${data.verification ? "✅ Valid" : "❌ Invalid"}
-✅ Query processed successfully.
-          </pre>`;
-      } catch (error) {
-        output.innerHTML = `<pre>Error: ${error.message}</pre>`;
+Signature (s): ${data.multi_signature}
+Hash h(t, m): ${data.hash}
+Aggregated t: ${data.t}
+Verification: ${data.verification ? '✅ Valid' : '❌ Invalid'}
+
+Encrypted (by PKG): ${data.encrypted_quantity}
+Decrypted (by PKG): ${data.decrypted_quantity}
+          </pre>
+        `;
+      } catch (err) {
+        output.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
       }
     }
   </script>

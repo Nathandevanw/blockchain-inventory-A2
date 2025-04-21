@@ -15,12 +15,7 @@ harn = keys["HarnKeys"]
 IDs = harn["IDs"]
 Randoms = harn["Randoms"]
 
-# PKG Key Setup: using values of p, q, and e from the key list
-# These values are already precomputed in 'all_keys.json' and include RSA n and d
-# Example: n = p * q, d = e^-1 mod (p-1)(q-1)
-# They are hardcoded for all identities to match assignment requirements
-
-# Inventory item data: same quantity, price, location across all inventory nodes
+# Hardcoded inventory records: each warehouse stores the same item info
 inventory_items = {
     "001": {"qty": 32, "price": 12, "location": "D"},
     "002": {"qty": 20, "price": 14, "location": "C"},
@@ -32,29 +27,29 @@ def powmod(x, y, z):
     return pow(x, y, z)
 
 def generate_g(ID, d, n):
-    return powmod(ID, d, n)
+    return powmod(ID, d, n)  # g = ID^d mod n
 
 def generate_t(r, e, n):
-    return powmod(r, e, n)
+    return powmod(r, e, n)  # t = r^e mod n
 
 def compute_t(t_list, n):
     t = 1
     for val in t_list:
         t = (t * val) % n
-    return t
+    return t  # combined t = ∏tᵢ mod n
 
 def hash_tm(t, message):
     h = hashlib.md5((str(t) + str(message)).encode()).hexdigest()
-    return int(h, 16)
+    return int(h, 16)  # H(t || m)
 
 def generate_s(g, r, h, n):
-    return (g * powmod(r, h, n)) % n
+    return (g * powmod(r, h, n)) % n  # s = g * r^h mod n
 
 def aggregate_s(s_list, n):
     s = 1
     for si in s_list:
         s = (s * si) % n
-    return s
+    return s  # aggregated s = ∏sᵢ mod n
 
 def verify_signature(s, e, n, ids, t, h):
     lhs = powmod(s, e, n)
@@ -62,11 +57,11 @@ def verify_signature(s, e, n, ids, t, h):
     for ID in ids:
         id_product = (id_product * ID) % n
     rhs = (id_product * powmod(t, h, n)) % n
-    return lhs == rhs
+    return lhs == rhs  # s^e == ID_product * t^h mod n
 
 def rsa_encrypt(message, e, n):
     m = int.from_bytes(str(message).encode(), 'big')
-    return powmod(m, e, n)
+    return powmod(m, e, n)  # ciphertext = m^e mod n
 
 def rsa_decrypt(cipher, d, n):
     m = powmod(cipher, d, n)
@@ -80,15 +75,18 @@ def query_item():
         return jsonify({"error": "Item ID not found."}), 404
 
     qty = item_info["qty"]
-    e_pkg = harn["PKG"]["e"]  # RSA public key
-    n_pkg = harn["PKG"]["n"]  # RSA modulus (n = p * q)
+
+    # === Begin Harn Signature Process ===
+    # PKG RSA public key (used for signature verification and encryption)
+    e_pkg = harn["PKG"]["e"]
+    n_pkg = harn["PKG"]["n"]
+
     t_list, s_list, inventory_data = [], [], []
 
-    # Generate signature components for each inventory node
     for name in inventories:
         ID = IDs[name]
-        d = inventories[name]["d"]
-        n = inventories[name]["n"]
+        d = inventories[name]["d"]  # each inventory has its own private key dᵢ
+        n = inventories[name]["n"]  # each inventory has its own modulus nᵢ
         r = Randoms[name]
 
         g = generate_g(ID, d, n)
@@ -106,7 +104,6 @@ def query_item():
             "location": item_info["location"]
         })
 
-    # Compute combined t and hash
     t = compute_t(t_list, n_pkg)
     h = hash_tm(t, qty)
 
@@ -122,9 +119,10 @@ def query_item():
     ids = list(IDs.values())
     verified = verify_signature(sig, e_pkg, n_pkg, ids, t, h)
 
-    # Encrypt total using PKG's RSA public key
+    # === Encrypt the quantity using PKG public key ===
     enc = rsa_encrypt(qty, e_pkg, n_pkg)
-    dec = rsa_decrypt(enc, harn["PKG"]["d"], n_pkg)  # For verification simulation only
+    # === Simulate decryption with PKG private key ===
+    dec = rsa_decrypt(enc, harn["PKG"]["d"], n_pkg)
 
     return jsonify({
         "itemId": item_id,
