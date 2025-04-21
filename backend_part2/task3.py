@@ -5,8 +5,7 @@ import hashlib
 app = Flask(__name__)
 CORS(app)
 
-# ===== HARN + RSA PARAMETERS (hardcoded from ListOfKeys) =====
-# PKG keys (public and private)
+# PKG Keys
 p_pkg = 1004162036461488639338597000466705179253226703
 q_pkg = 950133741151267522116252385927940618264103623
 e_pkg = 973028207197278907211
@@ -14,7 +13,7 @@ n_pkg = p_pkg * q_pkg
 phi_pkg = (p_pkg - 1) * (q_pkg - 1)
 d_pkg = pow(e_pkg, -1, phi_pkg)
 
-# Procurement Officer RSA keys
+# Procurement Officer Keys
 po_p = 1080954735722463992988394149602856332100628417
 po_q = 1158106283320086444890911863299879973542293243
 po_e = 106506253943651610547613
@@ -22,30 +21,18 @@ po_n = po_p * po_q
 po_phi = (po_p - 1) * (po_q - 1)
 po_d = pow(po_e, -1, po_phi)
 
-# Identity and randoms per warehouse
-IDs = {
-    "Inventory_A": 126,
-    "Inventory_B": 127,
-    "Inventory_C": 128,
-    "Inventory_D": 129
-}
+# Inventory IDs and Randoms
+IDs = {"Inventory_A": 126, "Inventory_B": 127, "Inventory_C": 128, "Inventory_D": 129}
+Randoms = {"Inventory_A": 621, "Inventory_B": 721, "Inventory_C": 821, "Inventory_D": 921}
+warehouses = ["Inventory_A", "Inventory_B", "Inventory_C", "Inventory_D"]
 
-Randoms = {
-    "Inventory_A": 621,
-    "Inventory_B": 721,
-    "Inventory_C": 821,
-    "Inventory_D": 921
-}
-
-# Simulated database: every warehouse has the same info
+# Inventory Data
 item_db = {
     "001": {"qty": 32, "price": 12, "location": "D"},
     "002": {"qty": 20, "price": 14, "location": "C"},
     "003": {"qty": 22, "price": 16, "location": "B"},
     "004": {"qty": 12, "price": 18, "location": "A"}
 }
-
-warehouses = ["Inventory_A", "Inventory_B", "Inventory_C", "Inventory_D"]
 
 def md5_hash(value):
     return int(hashlib.md5(str(value).encode()).hexdigest(), 16)
@@ -85,7 +72,7 @@ def verify_signature(s, t, h):
     for ID in IDs.values():
         id_product = (id_product * ID) % n_pkg
     rhs = (id_product * powmod(t, h, n_pkg)) % n_pkg
-    return lhs == rhs
+    return lhs == rhs, lhs, rhs
 
 @app.route("/query_item", methods=["POST"])
 def query():
@@ -94,9 +81,7 @@ def query():
     if not item:
         return jsonify({"error": "Item ID not found"}), 404
 
-    # === Signature Phase ===
     g_list, t_list, s_list = [], [], []
-    h = None
     result_details = []
 
     for name in warehouses:
@@ -126,9 +111,8 @@ def query():
         result_details[i]["s_i"] = s_i
 
     s = compute_aggregate_s(s_list)
-    valid = verify_signature(s, t, h)
+    valid, lhs, rhs = verify_signature(s, t, h)
 
-    # === Encrypt response using Procurement Officer's public key ===
     encrypted = rsa_encrypt(item["qty"], po_e, po_n)
     decrypted = rsa_decrypt(encrypted, po_d, po_n)
 
@@ -141,6 +125,8 @@ def query():
         "valid": valid,
         "encrypted_quantity": str(encrypted),
         "decrypted_quantity": str(decrypted),
+        "lhs": str(lhs),
+        "rhs": str(rhs),
         "warehouses": result_details
     })
 

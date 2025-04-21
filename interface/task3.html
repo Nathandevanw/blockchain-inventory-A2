@@ -75,13 +75,37 @@
 
           <h3>Verification Summary</h3>
           <pre>
-Multi-signature (s): ${data.signature}
-Aggregated t: ${data.t}
-Hash (h): ${data.hash}
+Step a. Response message encrypted by PKG using RSA public key:
+Encrypted Quantity:
+  - Decimal: ${data.encrypted_quantity}
+  - Hex: ${BigInt(data.encrypted_quantity).toString(16)}
 
-Verification: ${data.valid ? '✅ VALID' : '❌ INVALID'}
-Encrypted Quantity (by PO): ${data.encrypted_quantity}
-Decrypted Quantity (by PO): ${data.decrypted_quantity}
+Step b. Encrypted message + multi-signature parameters sent to the user:
+  - Signature (s):
+      - Decimal: ${data.signature}
+      - Hex: ${BigInt(data.signature).toString(16)}
+  - Aggregated t:
+      - Decimal: ${data.t}
+      - Hex: ${BigInt(data.t).toString(16)}
+  - Hash (h):
+      - Decimal: ${data.hash}
+      - Hex: ${BigInt(data.hash).toString(16)}
+
+Step c. The user (Procurement Officer) decrypts the message using their RSA private key:
+Decrypted Quantity:
+  - Decimal: ${data.decrypted_quantity}
+  - Hex: ${BigInt(data.decrypted_quantity).toString(16)}
+
+Step d. The user verifies the multi-signature:
+Computed LHS = s^e mod n:
+  - Decimal: ${data.lhs}
+  - Hex: ${BigInt(data.lhs).toString(16)}
+
+Computed RHS = ∏ID × t^h mod n:
+  - Decimal: ${data.rhs}
+  - Hex: ${BigInt(data.rhs).toString(16)}
+
+Signature verification result: ${data.valid ? '✅ VALID' : '❌ INVALID'}
           </pre>
         `;
       } catch (err) {
