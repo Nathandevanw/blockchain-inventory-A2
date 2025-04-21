@@ -1,9 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Inventory Verification - Task 3</title>
+  <meta charset="UTF-8">
+  <title>Inventory Multi-Signature Query</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 2rem; }
     label, select, button { margin-top: 1rem; display: block; }
@@ -53,33 +52,36 @@
           <p><strong>Price:</strong> $${data.item.price}</p>
           <p><strong>Location:</strong> ${data.item.location}</p>
 
-          <h3>Inventory Nodes</h3>
+          <h3>Warehouse Signature Details</h3>
           <table>
             <tr>
-              <th>Inventory</th>
-              <th>gᵢ</th>
+              <th>Warehouse</th>
+              <th>ID</th>
+              <th>r</th>
+              <th>g</th>
               <th>tᵢ</th>
               <th>sᵢ</th>
             </tr>
-            ${data.inventory_nodes.map(inv => `
+            ${data.warehouses.map(w => `
               <tr>
-                <td>${inv.inventory}</td>
-                <td>${inv.g}</td>
-                <td>${inv.t_i}</td>
-                <td>${inv.s_i}</td>
-              </tr>
-            `).join('')}
+                <td>${w.warehouse}</td>
+                <td>${w.ID}</td>
+                <td>${w.r}</td>
+                <td>${w.g}</td>
+                <td>${w.t_i}</td>
+                <td>${w.s_i}</td>
+              </tr>`).join('')}
           </table>
 
-          <h3>Multi-Signature Verification</h3>
+          <h3>Verification Summary</h3>
           <pre>
-Signature (s): ${data.multi_signature}
-Hash h(t, m): ${data.hash}
+Multi-signature (s): ${data.signature}
 Aggregated t: ${data.t}
-Verification: ${data.verification ? '✅ Valid' : '❌ Invalid'}
+Hash (h): ${data.hash}
 
-Encrypted (by PKG): ${data.encrypted_quantity}
-Decrypted (by PKG): ${data.decrypted_quantity}
+Verification: ${data.valid ? '✅ VALID' : '❌ INVALID'}
+Encrypted Quantity (by PO): ${data.encrypted_quantity}
+Decrypted Quantity (by PO): ${data.decrypted_quantity}
           </pre>
         `;
       } catch (err) {
