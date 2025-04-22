@@ -11,11 +11,11 @@ def generate_keys(p, q, e):
     d = pow(e, -1, phi)
     return {"public": (e, n), "private": (d, n)}
 
-def sign(message, private_key):
+def sign_record(message, private_key):
     d, n = private_key
     return pow(int.from_bytes(message.encode(), 'big'), d, n)
 
-def verify(message, signature, public_key):
+def verify_signature(message, signature, public_key):
     e, n = public_key
     m2 = pow(signature, e, n)
     return m2 == int.from_bytes(message.encode(), 'big')
