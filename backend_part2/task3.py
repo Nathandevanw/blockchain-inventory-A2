@@ -5,7 +5,9 @@ import hashlib
 app = Flask(__name__)
 CORS(app)
 
-# -- PKG key generation (used to simulate signing + verification) --
+# --- Key Setup based on List of Keys document ---
+
+# PKG Keys
 p_pkg = 1004162036461488639338597000466705179253226703
 q_pkg = 950133741151267522116252385927940618264103623
 e_pkg = 973028207197278907211
@@ -13,7 +15,7 @@ n_pkg = p_pkg * q_pkg
 phi_pkg = (p_pkg - 1) * (q_pkg - 1)
 d_pkg = pow(e_pkg, -1, phi_pkg)
 
-# -- Procurement Officer’s RSA keys (used for final encryption) --
+# Procurement Officer Keys
 po_p = 1080954735722463992988394149602856332100628417
 po_q = 1158106283320086444890911863299879973542293243
 po_e = 106506253943651610547613
@@ -21,22 +23,12 @@ po_n = po_p * po_q
 po_phi = (po_p - 1) * (po_q - 1)
 po_d = pow(po_e, -1, po_phi)
 
-# -- Warehouses and their values --
-IDs = {
-    "Inventory_A": 126,
-    "Inventory_B": 127,
-    "Inventory_C": 128,
-    "Inventory_D": 129
-}
-Randoms = {
-    "Inventory_A": 621,
-    "Inventory_B": 721,
-    "Inventory_C": 821,
-    "Inventory_D": 921
-}
-warehouse_list = list(IDs.keys())
+# Inventory IDs and Randoms
+IDs = {"Inventory_A": 126, "Inventory_B": 127, "Inventory_C": 128, "Inventory_D": 129}
+Randoms = {"Inventory_A": 621, "Inventory_B": 721, "Inventory_C": 821, "Inventory_D": 921}
+warehouse_list = ["Inventory_A", "Inventory_B", "Inventory_C", "Inventory_D"]
 
-# -- Static inventory data (shared across all nodes) --
+# Simple Inventory Database
 item_db = {
     "001": {"qty": 32, "price": 12, "location": "D"},
     "002": {"qty": 20, "price": 14, "location": "C"},
@@ -44,95 +36,124 @@ item_db = {
     "004": {"qty": 12, "price": 18, "location": "A"}
 }
 
-# -- Just a helper to do MD5 + convert to int --
-def hash_md5(val):
-    return int(hashlib.md5(str(val).encode()).hexdigest(), 16)
+# --- Helper Cryptographic Functions ---
 
-# -- RSA-style encryption --
-def encrypt_rsa(msg, e, n):
+def md5_hash(value):
+    return int(hashlib.md5(str(value).encode()).hexdigest(), 16)
+
+def rsa_encrypt(msg, e, n):
     m = int.from_bytes(str(msg).encode(), 'big')
     return pow(m, e, n)
 
-def decrypt_rsa(ciphertext, d, n):
-    m = pow(ciphertext, d, n)
+def rsa_decrypt(c, d, n):
+    m = pow(c, d, n)
     return int.from_bytes(m.to_bytes((m.bit_length() + 7) // 8, 'big'), 'big')
 
-# -- Simple power mod wrapper for clarity --
-def modpow(x, y, mod):
-    return pow(x, y, mod)
+def powmod(x, y, z):
+    return pow(x, y, z)
 
-# -- Generate g = ID^d mod n for each warehouse --
-def get_g(ID):
-    return modpow(ID, d_pkg, n_pkg)
+def generate_g(ID):
+    return powmod(ID, d_pkg, n_pkg)
 
-def get_t(r):
-    return modpow(r, e_pkg, n_pkg)
+def generate_t(r):
+    return powmod(r, e_pkg, n_pkg)
 
-def aggregate_product(values):
+def compute_aggregate_t(t_list):
     result = 1
-    for val in values:
-        result = (result * val) % n_pkg
+    for t in t_list:
+        result = (result * t) % n_pkg
     return result
 
-def verify_multi_sig(s, t, h):
-    lhs = modpow(s, e_pkg, n_pkg)
+def compute_aggregate_s(s_list):
+    result = 1
+    for s in s_list:
+        result = (result * s) % n_pkg
+    return result
+
+def verify_signature(s, t, h):
+    lhs = powmod(s, e_pkg, n_pkg)
     id_product = 1
-    for val in IDs.values():
-        id_product = (id_product * val) % n_pkg
-    rhs = (id_product * modpow(t, h, n_pkg)) % n_pkg
+    for ID in IDs.values():
+        id_product = (id_product * ID) % n_pkg
+    rhs = (id_product * powmod(t, h, n_pkg)) % n_pkg
     return lhs == rhs, lhs, rhs
 
+# --- Proof of Authority (PoA) Consensus ---
+
+REQUIRED_APPROVALS = 3  # Need 3 out of 4 nodes to agree
+
+def validate_record(record, node_name):
+    """
+    Each warehouse checks if the quantity is realistic (for demo purposes, qty <= 1000).
+    """
+    return int(record["qty"]) <= 1000
+
+def simulate_consensus(record):
+    """
+    PoA consensus: each trusted node votes.
+    Consensus reached if at least 3 approvals.
+    """
+    votes = {}
+    for node in warehouse_list:
+        votes[node] = validate_record(record, node)
+
+    approvals = sum(votes.values())
+    consensus_reached = approvals >= REQUIRED_APPROVALS
+
+    return consensus_reached, votes
+
+# --- Flask API Endpoint for Item Query ---
+
 @app.route("/query_item", methods=["POST"])
-def handle_query():
+def query():
     item_id = request.json.get("item_id")
     item = item_db.get(item_id)
 
     if not item:
-        return jsonify({"error": f"Item ID {item_id} not found"}), 404
+        return jsonify({"error": "Item ID not found"}), 404
 
-    # -- Lists to hold pieces from each warehouse --
-    g_values, t_values, s_values = [], [], []
-    breakdown = []
+    # First: Simulate PoA consensus
+    consensus_reached, votes = simulate_consensus(item)
 
-    # Step 1: Create gᵢ and tᵢ
-    for w in warehouse_list:
-        ID = IDs[w]
-        r = Randoms[w]
+    if not consensus_reached:
+        return jsonify({"error": "Consensus failed. Query rejected."}), 403
 
-        g_i = get_g(ID)
-        t_i = get_t(r)
+    # If consensus OK: proceed with multi-signature
+    g_list, t_list, s_list = [], [], []
+    result_details = []
 
-        g_values.append(g_i)
-        t_values.append(t_i)
+    for name in warehouse_list:
+        ID = IDs[name]
+        r = Randoms[name]
+        g = generate_g(ID)
+        t = generate_t(r)
 
-        breakdown.append({
-            "warehouse": w,
+        g_list.append(g)
+        t_list.append(t)
+
+        result_details.append({
+            "warehouse": name,
             "ID": ID,
             "r": r,
-            "g": g_i,
-            "t_i": t_i
+            "g": g,
+            "t_i": t
         })
 
-    # Step 2: Combine all tᵢ to compute t, then hash(t || msg)
-    t = aggregate_product(t_values)
-    h = hash_md5(str(t) + str(item["qty"]))
+    t = compute_aggregate_t(t_list)
+    h = md5_hash(str(t) + str(item["qty"]))
 
-    # Step 3: Generate sᵢ = gᵢ * rᵢ^h, then combine to full signature
-    for idx, w in enumerate(warehouse_list):
-        r = Randoms[w]
-        s_i = (g_values[idx] * modpow(r, h, n_pkg)) % n_pkg
-        s_values.append(s_i)
-        breakdown[idx]["s_i"] = s_i
+    for i, name in enumerate(warehouse_list):
+        r = Randoms[name]
+        s_i = (g_list[i] * powmod(r, h, n_pkg)) % n_pkg
+        s_list.append(s_i)
+        result_details[i]["s_i"] = s_i
 
-    # Final signature s = product of all sᵢ
-    s = aggregate_product(s_values)
+    s = compute_aggregate_s(s_list)
+    valid, lhs, rhs = verify_signature(s, t, h)
 
-    # Step 4: Encrypt quantity using PO key
-    encrypted_msg = encrypt_rsa(item["qty"], po_e, po_n)
-    decrypted_msg = decrypt_rsa(encrypted_msg, po_d, po_n)
-
-    # Step 5: Verify signature
-    is_valid, lhs, rhs = verify_multi_sig(s, t, h)
+    # Encrypt quantity before sending
+    encrypted = rsa_encrypt(item["qty"], po_e, po_n)
+    decrypted = rsa_decrypt(encrypted, po_d, po_n)
 
     return jsonify({
         "itemId": item_id,
@@ -140,12 +161,14 @@ def handle_query():
         "signature": str(s),
         "t": str(t),
         "hash": str(h),
-        "valid": is_valid,
-        "encrypted_quantity": str(encrypted_msg),
-        "decrypted_quantity": str(decrypted_msg),
+        "valid": valid,
+        "encrypted_quantity": str(encrypted),
+        "decrypted_quantity": str(decrypted),
         "lhs": str(lhs),
         "rhs": str(rhs),
-        "warehouses": breakdown
+        "warehouses": result_details,
+        "consensus_votes": votes,
+        "consensus_result": consensus_reached
     })
 
 if __name__ == "__main__":
