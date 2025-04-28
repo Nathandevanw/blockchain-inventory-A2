@@ -18,10 +18,10 @@ d_pkg = pow(e_pkg, -1, phi_pkg)
 # Procurement Officer Keys
 po_p = 1080954735722463992988394149602856332100628417
 po_q = 1158106283320086444890911863299879973542293243
-po_e = 106506253943651610547613
+po_e = 106506253943651610547613 # public exponent
 po_n = po_p * po_q
 po_phi = (po_p - 1) * (po_q - 1)
-po_d = pow(po_e, -1, po_phi)
+po_d = pow(po_e, -1, po_phi) # Procurement Officer's private key
 
 # Inventory IDs and Randoms
 IDs = {"Inventory_A": 126, "Inventory_B": 127, "Inventory_C": 128, "Inventory_D": 129}
@@ -39,38 +39,67 @@ item_db = {
 # --- Helper Cryptographic Functions ---
 
 def md5_hash(value):
+    """
+    Hash the given value using MD5 and return it as an integer.
+    Used to create a challenge number h in multi-signature scheme.
+    """
     return int(hashlib.md5(str(value).encode()).hexdigest(), 16)
 
 def rsa_encrypt(msg, e, n):
+    """
+    Encrypt the message 'msg' using RSA with public key (e, n).
+    Converts the message into bytes, then integer, then performs encryption.
+    """
     m = int.from_bytes(str(msg).encode(), 'big')
     return pow(m, e, n)
 
 def rsa_decrypt(c, d, n):
+    """
+    Decrypt the ciphertext 'c' using RSA with private key (d, n).
+    """
     m = pow(c, d, n)
     return int.from_bytes(m.to_bytes((m.bit_length() + 7) // 8, 'big'), 'big')
 
 def powmod(x, y, z):
+    """
+    Shortcut for modular exponentiation (x^y mod z).
+    """
     return pow(x, y, z)
 
 def generate_g(ID):
+    """
+    Generate g = ID^d_pkg mod n_pkg
+    Each warehouse's unique g value (signature base) is generated this way.
+    """
     return powmod(ID, d_pkg, n_pkg)
 
 def generate_t(r):
+    """
+    Generate t = r^e_pkg mod n_pkg
+    t is the public commitment value derived from random r.
+    """
     return powmod(r, e_pkg, n_pkg)
 
 def compute_aggregate_t(t_list):
+    """
+    Aggregate all t values into a single t for the entire network (multiply and mod n).
+    """
     result = 1
     for t in t_list:
         result = (result * t) % n_pkg
     return result
 
 def compute_aggregate_s(s_list):
+    """
+    Aggregate all s_i signatures into a single s (multiply and mod n).
+    """
     result = 1
     for s in s_list:
         result = (result * s) % n_pkg
     return result
 
 def verify_signature(s, t, h):
+    
     lhs = powmod(s, e_pkg, n_pkg)
     id_product = 1
     for ID in IDs.values():

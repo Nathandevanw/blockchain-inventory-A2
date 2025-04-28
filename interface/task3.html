@@ -109,13 +109,13 @@
 
         // Full page content
         output.innerHTML = `
-          <h3>🧾 Item Info</h3>
+          <h3>Item Info</h3>
           <p><strong>ID:</strong> ${data.itemId}</p>
           <p><strong>Quantity:</strong> ${data.item.qty}</p>
           <p><strong>Price:</strong> $${data.item.price}</p>
           <p><strong>Location:</strong> ${data.item.location}</p>
 
-          <h3>🏬 Warehouse Signature Details</h3>
+          <h3>Warehouse Signature Details</h3>
           <table>
             <thead>
               <tr>
@@ -147,7 +147,7 @@
             </span>
           </p>
 
-          <h3>🧠 Signature & RSA Breakdown</h3>
+          <h3>Signature & RSA Breakdown</h3>
           <pre>
 Step a: Quantity Encrypted by PKG
   - Decimal: ${data.encrypted_quantity}
@@ -174,7 +174,7 @@ Step d: Multi-Signature Verification:
   - RHS = ID₁⋅ID₂⋅...⋅t^h mod n = ${data.rhs}
       → Hex: 0x${BigInt(data.rhs).toString(16)}
 
-✅ Signature Verification: ${data.valid ? "VALID ✅" : "INVALID ❌"}
+Signature Verification: ${data.valid ? "VALID ✅" : "INVALID ❌"}
           </pre>
         `;
 
