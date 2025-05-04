@@ -84,19 +84,19 @@ def compute_aggregate_t(t_list):
     """
     Aggregate all t values into a single t for the entire network (multiply and mod n).
     """
-    result = 1
+    t_result = 1
     for t in t_list:
-        result = (result * t) % n_pkg
-    return result
+        t_result = (t_result * t) % n_pkg
+    return t_result
 
 def compute_aggregate_s(s_list):
     """
     Aggregate all s_i signatures into a single s (multiply and mod n).
     """
-    result = 1
+    s_result = 1
     for s in s_list:
-        result = (result * s) % n_pkg
-    return result
+        s_result = (s_result * s) % n_pkg
+    return s_result
 
 def verify_signature(s, t, h):
     
