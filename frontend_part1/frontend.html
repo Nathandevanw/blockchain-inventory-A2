@@ -1,36 +1,36 @@
-<!-- add_record.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Task 1 – Add & Sign Inventory Record</title>
+  <title>Task 1 – Add & Sign Inventory Record</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 2rem; background: #e8e8e8; }
-    label, select, input, button { display: block; margin: 0.5rem 0; font-size: 1rem; }
-    pre { background: #eee; padding: 1rem; border-radius: 4px; }
-    .invalid { color: red; }
-    .valid   { color: green; }
+    body{font-family:Arial;padding:2rem;background:#e8e8e8}
+    label,select,input,button{display:block;margin:0.5rem 0;font-size:1rem}
+    pre{background:#eee;padding:1rem;border-radius:4px;white-space:pre-wrap}
+    .invalid{color:red} .valid{color:green}
+    .badge{font-size:1.1rem;padding:0.5rem;background:#d4edda;color:#155724;
+           border:1px solid #c3e6cb;border-radius:4px;display:inline-block}
   </style>
 </head>
 <body>
-  <h1>📦 Task 1 – Add New Inventory Record</h2>
+  <h1>📦 Task 1 – Add New Inventory Record</h1>
 
-  <label for="node">Select Inventory Node:</label>
+  <label>Select Inventory Node:</label>
   <select id="node">
-    <option value="">-- choose --</option>
-    <option value="Inventory_A">Inventory A</option>
-    <option value="Inventory_B">Inventory B</option>
-    <option value="Inventory_C">Inventory C</option>
-    <option value="Inventory_D">Inventory D</option>
+    <option></option>
+    <option>Inventory_A</option>
+    <option>Inventory_B</option>
+    <option>Inventory_C</option>
+    <option>Inventory_D</option>
   </select>
 
-  <label for="itemId">Item ID:</label>
-  <input id="itemId" placeholder="e.g. 1">
+  <label>Item ID:</label>
+  <input id="itemId" placeholder="e.g. 001">
 
-  <label for="qty">Quantity:</label>
+  <label>Quantity:</label>
   <input id="qty" type="number" placeholder="e.g. 32">
 
-  <label for="price">Price:</label>
+  <label>Price:</label>
   <input id="price" type="number" step="0.01" placeholder="e.g. 12.00">
 
   <button onclick="addRecord()">Sign & Submit</button>
@@ -40,47 +40,40 @@
 
   <script>
   async function addRecord() {
-    const node = document.getElementById('node').value;
-    const id   = document.getElementById('itemId').value;
-    const qty  = Number(document.getElementById('qty').value);
-    const price= Number(document.getElementById('price').value);
-    const out  = document.getElementById('output');
+    const node  = document.getElementById('node').value;
+    const id    = document.getElementById('itemId').value;
+    const qty   = Number(document.getElementById('qty').value);
+    const price = Number(document.getElementById('price').value);
+    const out   = document.getElementById('output');
 
-    if (!node || !id || !qty || isNaN(price)) {
+    if (!node||!id||!qty||isNaN(price)) {
       out.innerHTML = '<span class="invalid">Please fill in all fields.</span>';
       return;
     }
-
     out.textContent = 'Signing…';
-
-    const payload = {
-      node: node,
-      record: { id: id, qty: qty, price: price }
-    };
 
     try {
       const res = await fetch('http://localhost:5000/add_record', {
         method:  'POST',
         headers: {'Content-Type':'application/json'},
-        body:    JSON.stringify(payload)
+        body:    JSON.stringify({ node, record:{ id, qty, price } })
       });
       const data = await res.json();
-      if (res.ok) {
-        out.innerHTML = `
-<span class="valid">✔ Signed successfully!</span>
+      if (!res.ok) {
+        out.innerHTML = `<span class="invalid">Error: ${data.error}</span>`;
+        return;
+      }
+
+      out.innerHTML = `
+<div class="badge">✅ Consensus reached!</div>
 
 Node:      ${data.node}
-Item:      ${data.record.id}
+Item ID:   ${data.record.id}
 Quantity:  ${data.record.qty}
 Price:     $${data.record.price}
 
-Signature: ${data.signature}
 
-Valid:     ${data.valid ? '✅ yes' : '❌ no'}
-        `;
-      } else {
-        out.innerHTML = `<span class="invalid">Error: ${data.error || res.statusText}</span>`;
-      }
+      `;
     } catch (err) {
       out.innerHTML = `<span class="invalid">Fetch error: ${err.message}</span>`;
     }
