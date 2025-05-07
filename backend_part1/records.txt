@@ -11,3 +11,4 @@ Inventory_B,32,12,Inventory_B
 Inventory_A,32,12,Inventory_A
 Inventory_A,32,12,Inventory_A
 Inventory_B,32,12,Inventory_B
+Inventory_A,32,12,Inventory_A
