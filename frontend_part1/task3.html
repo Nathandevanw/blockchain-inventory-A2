@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Inventory Query – Task 3 (PBFT)</title>
+  <title>Task 3 – Inventory Query (PBFT)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f5f5f5;
+      background: #f0f0f0;
       padding: 40px;
     }
     h2 {
@@ -22,13 +22,13 @@
     }
     button {
       padding: 10px 16px;
-      background-color: #2980b9;
+      background-color: #3498db;
       color: white;
       border: none;
       cursor: pointer;
     }
     button:hover {
-      background-color: #1c5980;
+      background-color: #2c80b4;
     }
     .result {
       margin-top: 30px;
@@ -43,7 +43,7 @@
 </head>
 <body>
 
-  <h2>🔐 Task 3 – Query Inventory with PBFT + Multi-Signature</h2>
+  <h2>🔐 Task 3 – PBFT + Multi-Signature Inventory Query</h2>
 
   <label for="itemId">Enter Item ID:</label>
   <input type="text" id="itemId" placeholder="e.g., 001">
@@ -55,24 +55,33 @@
     async function queryItem() {
       const itemId = document.getElementById("itemId").value.trim();
       const output = document.getElementById("output");
-      output.innerText = "⌛ Sending request...";
+
+      if (!itemId) {
+        output.innerText = "⚠️ Please enter an Item ID.";
+        return;
+      }
+
+      output.innerText = "⌛ Querying inventory...";
 
       try {
-        const res = await fetch("http://127.0.0.1:5000/query_item", {
+        const response = await fetch("http://127.0.0.1:5000/query_item", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json"
+          },
           body: JSON.stringify({ item_id: itemId })
         });
 
-        const data = await res.json();
+        const data = await response.json();
 
-        if (res.ok) {
+        if (response.ok) {
           output.innerText = JSON.stringify(data, null, 2);
         } else {
-          output.innerText = "❌ " + (data.error || "Request failed.");
+          output.innerText = `❌ ${data.error || "Error occurred during query."}`;
         }
-      } catch (err) {
-        output.innerText = "❌ Network error: Could not contact server.";
+
+      } catch (error) {
+        output.innerText = "❌ Network error. Is the Flask server running?";
       }
     }
   </script>
