@@ -2,190 +2,80 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Warehouse Query - Task 3</title>
+  <title>Inventory Query – Task 3 (PBFT)</title>
   <style>
     body {
-      font-family: 'Segoe UI', sans-serif;
-      padding: 2rem;
-      background: #f8f8f8;
-      color: #333;
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 40px;
     }
-    label, select, button {
-      display: block;
-      margin-top: 1rem;
-      font-size: 1rem;
+    h2 {
+      color: #2c3e50;
+    }
+    label {
+      font-weight: bold;
+    }
+    input[type="text"] {
+      padding: 10px;
+      width: 200px;
+      margin-right: 10px;
     }
     button {
-      padding: 0.5rem 1rem;
-      background-color: #007acc;
+      padding: 10px 16px;
+      background-color: #2980b9;
       color: white;
       border: none;
-      border-radius: 5px;
       cursor: pointer;
-      margin-top: 1rem;
     }
     button:hover {
-      background-color: #005fa3;
+      background-color: #1c5980;
     }
-    table {
-      margin-top: 1.5rem;
-      border-collapse: collapse;
-      width: 100%;
-      font-size: 0.95rem;
-    }
-    th, td {
-      padding: 8px;
+    .result {
+      margin-top: 30px;
+      background: white;
+      padding: 20px;
       border: 1px solid #ccc;
-      text-align: center;
-    }
-    th {
-      background-color: #f0f0f0;
-    }
-    pre {
-      background: #eee;
-      padding: 1rem;
-      border-radius: 6px;
+      font-family: monospace;
       white-space: pre-wrap;
-      margin-top: 2rem;
+      overflow-x: auto;
     }
-    .good { color: green; font-weight: bold; }
-    .bad { color: red; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h2>📦 Task 3 - Inventory Query & Signature Verification</h2>
 
-  <label for="itemId">Pick an item to check:</label>
-  <select id="itemId">
-    <option value="001">Item 001</option>
-    <option value="002">Item 002</option>
-    <option value="003">Item 003</option>
-    <option value="004">Item 004</option>
-  </select>
+  <h2>🔐 Task 3 – Query Inventory with PBFT + Multi-Signature</h2>
 
-  <button onclick="queryItem()">Submit</button>
+  <label for="itemId">Enter Item ID:</label>
+  <input type="text" id="itemId" placeholder="e.g., 001">
+  <button onclick="queryItem()">Query</button>
 
-  <div id="output" style="margin-top:2rem;"></div>
+  <div class="result" id="output"></div>
 
   <script>
     async function queryItem() {
-      const itemId = document.getElementById('itemId').value;
-      const output = document.getElementById('output');
-      output.innerHTML = 'Querying the network...';
+      const itemId = document.getElementById("itemId").value.trim();
+      const output = document.getElementById("output");
+      output.innerText = "⌛ Sending request...";
 
       try {
-        const res = await fetch('http://localhost:5000/query_item', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const res = await fetch("http://127.0.0.1:5000/query_item", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ item_id: itemId })
         });
 
         const data = await res.json();
 
-        if (data.error) {
-          output.innerHTML = `<p style="color:red">${data.error}</p>`;
-          return;
+        if (res.ok) {
+          output.innerText = JSON.stringify(data, null, 2);
+        } else {
+          output.innerText = "❌ " + (data.error || "Request failed.");
         }
-
-        // Build warehouse table
-        const tableRows = (data.warehouses || []).map(w => `
-          <tr>
-            <td>${w.warehouse}</td>
-            <td>${w.ID}</td>
-            <td>${w.r}</td>
-            <td>${w.g}</td>
-            <td>${w.t_i}</td>
-            <td>${w.s_i}</td>
-          </tr>
-        `).join('');
-
-        // Build consensus voting table
-        const consensusRows = (data.consensus_votes ? Object.keys(data.consensus_votes) : []).map(wh => `
-          <tr>
-            <td>${wh}</td>
-            <td>${data.consensus_votes[wh] ? '✅ Approve' : '❌ Reject'}</td>
-          </tr>
-        `).join('');
-
-        // Full page content
-        output.innerHTML = `
-          <h3>Item Info</h3>
-          <p><strong>ID:</strong> ${data.itemId}</p>
-          <p><strong>Quantity:</strong> ${data.item.qty}</p>
-          <p><strong>Price:</strong> $${data.item.price}</p>
-          <p><strong>Location:</strong> ${data.item.location}</p>
-
-          <h3>Warehouse Signature Details</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Warehouse</th>
-                <th>ID</th>
-                <th>r</th>
-                <th>gᵢ</th>
-                <th>tᵢ</th>
-                <th>sᵢ</th>
-              </tr>
-            </thead>
-            <tbody>${tableRows}</tbody>
-          </table>
-
-          <h3>🗳️ PoA Consensus Voting</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Warehouse</th>
-                <th>Vote</th>
-              </tr>
-            </thead>
-            <tbody>${consensusRows}</tbody>
-          </table>
-
-          <p><strong>Consensus Result:</strong> 
-            <span class="${data.consensus_result ? 'good' : 'bad'}">
-              ${data.consensus_result ? '✅ Consensus Achieved: 3/4 or more approvals' : '❌ Consensus Failed: Not enough approvals'}
-            </span>
-          </p>
-
-          <h3>Signature & RSA Breakdown</h3>
-          <pre>
-Step a: Quantity Encrypted by PKG
-  - Decimal: ${data.encrypted_quantity}
-  - Hex: 0x${BigInt(data.encrypted_quantity).toString(16)}
-
-Step b: Sent to Procurement Officer with multi-signature parameters:
-  - Signature (s):
-      - Decimal: ${data.signature}
-      - Hex: 0x${BigInt(data.signature).toString(16)}
-  - Aggregated t:
-      - Decimal: ${data.t}
-      - Hex: 0x${BigInt(data.t).toString(16)}
-  - Hash h(t, m):
-      - Decimal: ${data.hash}
-      - Hex: 0x${BigInt(data.hash).toString(16)}
-
-Step c: Decrypted by Procurement Officer:
-  - Decimal: ${data.decrypted_quantity}
-  - Hex: 0x${BigInt(data.decrypted_quantity).toString(16)}
-
-Step d: Multi-Signature Verification:
-  - LHS = s^e mod n = ${data.lhs}
-      → Hex: 0x${BigInt(data.lhs).toString(16)}
-  - RHS = ID₁⋅ID₂⋅...⋅t^h mod n = ${data.rhs}
-      → Hex: 0x${BigInt(data.rhs).toString(16)}
-
-Signature Verification: ${data.valid ? "VALID ✅" : "INVALID ❌"}
-          </pre>
-        `;
-
-        if (data.consensus_result) {
-          alert("✅ Consensus Successful: All Warehouses Agreed!");
-        }
-
       } catch (err) {
-        output.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
+        output.innerText = "❌ Network error: Could not contact server.";
       }
     }
   </script>
+
 </body>
 </html>
