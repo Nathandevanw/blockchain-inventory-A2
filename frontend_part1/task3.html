@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Task 3 – PBFT Inventory Query</title>
+  <title>Task 3 – PBFT Multi-Signature Inventory Query</title>
   <style>
     body { font-family: Arial; padding: 2rem; background: #f4f4f4; }
     label, input, button { display: block; margin: 0.5rem 0; font-size: 1rem; }
@@ -16,10 +16,10 @@
 </head>
 <body>
 
-  <h1>🔐 Task 3 – Query & Verify Inventory (PBFT + Signature)</h1>
+  <h1>🔐 Task 3 – PBFT + Multi-Signature Inventory Query</h1>
 
   <label for="itemId">Enter Item ID:</label>
-  <input id="itemId" placeholder="e.g. 001">
+  <input id="itemId" placeholder="e.g. 002">
   <button onclick="queryRecord()">Submit</button>
 
   <h3>Response:</h3>
@@ -38,7 +38,7 @@
         return;
       }
 
-      out.textContent = '⏳ Querying record...';
+      out.textContent = '⏳ Querying...';
       detailsDiv.innerHTML = '';
 
       try {
@@ -50,11 +50,10 @@
 
         const text = await res.text();
         let data;
-
         try {
           data = JSON.parse(text);
         } catch {
-          throw new Error("Server returned invalid JSON:\n" + text);
+          throw new Error("Invalid JSON:\n" + text);
         }
 
         if (!res.ok) {
@@ -65,14 +64,14 @@
         out.innerHTML = `
 <div class="badge">✅ PBFT Consensus: ${data.pbft_votes.consensus ? "Yes" : "No"}</div>
 
-Item ID:            ${data.item.id}
-Quantity:           ${data.item.qty}
-Price:              $${data.item.price}
+Item ID:             ${data.item.id}
+Quantity:            ${data.item.qty}
+Price:               $${data.item.price}
 
-Encrypted Quantity: ${data.encrypted_quantity}
-Decrypted Quantity: ${data.decrypted_quantity}
+Encrypted Quantity:  ${data.encrypted_quantity}
+Decrypted Quantity:  ${data.decrypted_quantity}
 
-Signature Valid:    ${data.signature_valid ? "✅ Valid" : "❌ Invalid"}
+Signature Valid:     ${data.signature_valid ? "✅ Valid" : "❌ Invalid"}
 Final Signature (s): ${data.multi_signature}
 Hash (h):            ${data.h}
 LHS:                 ${data.lhs}
@@ -84,12 +83,12 @@ RHS:                 ${data.rhs}
           detailsHTML += `
 <div class="details">
   <h4>🏷️ ${w.warehouse}</h4>
-  ID (g):     ${w.g}<br>
+  g:        ${w.g}<br>
   t<sub>i</sub>:     ${w.t_i}<br>
   s<sub>i</sub>:     ${w.s_i}
-</div>
-          `;
+</div>`;
         });
+
         detailsDiv.innerHTML = detailsHTML;
 
       } catch (err) {
