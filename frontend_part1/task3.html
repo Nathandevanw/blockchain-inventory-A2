@@ -2,86 +2,99 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Task 3 – Inventory Query (PBFT)</title>
+  <title>Task 3 – PBFT Inventory Query</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f0f0f0;
-      padding: 40px;
-    }
-    h2 {
-      color: #2c3e50;
-    }
-    label {
-      font-weight: bold;
-    }
-    input[type="text"] {
-      padding: 10px;
-      width: 200px;
-      margin-right: 10px;
-    }
-    button {
-      padding: 10px 16px;
-      background-color: #3498db;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #2c80b4;
-    }
-    .result {
-      margin-top: 30px;
-      background: white;
-      padding: 20px;
-      border: 1px solid #ccc;
-      font-family: monospace;
-      white-space: pre-wrap;
-      overflow-x: auto;
-    }
+    body { font-family: Arial; padding: 2rem; background: #f4f4f4; }
+    label, input, button { display: block; margin: 0.5rem 0; font-size: 1rem; }
+    pre { background: #fff; padding: 1rem; border-radius: 4px; white-space: pre-wrap; }
+    .badge { background: #d4edda; color: #155724; padding: 0.5rem; border-radius: 4px;
+             border: 1px solid #c3e6cb; font-size: 1rem; margin-top: 1rem; }
+    .invalid { color: red; }
+    .details { margin-top: 1rem; border: 1px solid #ccc; padding: 1rem; background: #fff; border-radius: 6px; }
+    .details h4 { margin: 0 0 0.5rem 0; }
   </style>
 </head>
 <body>
 
-  <h2>🔐 Task 3 – PBFT + Multi-Signature Inventory Query</h2>
+  <h1>🔐 Task 3 – Query & Verify Inventory (PBFT + Signature)</h1>
 
   <label for="itemId">Enter Item ID:</label>
-  <input type="text" id="itemId" placeholder="e.g., 001">
-  <button onclick="queryItem()">Query</button>
+  <input id="itemId" placeholder="e.g. 001">
+  <button onclick="queryRecord()">Submit</button>
 
-  <div class="result" id="output"></div>
+  <h3>Response:</h3>
+  <pre id="output">—</pre>
+  <div id="details"></div>
 
   <script>
-    async function queryItem() {
-      const itemId = document.getElementById("itemId").value.trim();
-      const output = document.getElementById("output");
+    async function queryRecord() {
+      const id = document.getElementById('itemId').value.trim();
+      const out = document.getElementById('output');
+      const detailsDiv = document.getElementById('details');
 
-      if (!itemId) {
-        output.innerText = "⚠️ Please enter an Item ID.";
+      if (!id) {
+        out.innerHTML = '<span class="invalid">Please enter an Item ID.</span>';
+        detailsDiv.innerHTML = '';
         return;
       }
 
-      output.innerText = "⌛ Querying inventory...";
+      out.textContent = '⏳ Querying record...';
+      detailsDiv.innerHTML = '';
 
       try {
-        const response = await fetch("http://127.0.0.1:5000/query_item", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ item_id: itemId })
+        const res = await fetch('http://localhost:5000/query_item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_id: id })
         });
 
-        const data = await response.json();
+        const text = await res.text();
+        let data;
 
-        if (response.ok) {
-          output.innerText = JSON.stringify(data, null, 2);
-        } else {
-          output.innerText = `❌ ${data.error || "Error occurred during query."}`;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error("Server returned invalid JSON:\n" + text);
         }
 
-      } catch (error) {
-        output.innerText = "❌ Network error. Is the Flask server running?";
+        if (!res.ok) {
+          out.innerHTML = `<span class="invalid">❌ Error: ${data.error || "Unknown issue"}</span>`;
+          return;
+        }
+
+        out.innerHTML = `
+<div class="badge">✅ PBFT Consensus: ${data.pbft_votes.consensus ? "Yes" : "No"}</div>
+
+Item ID:            ${data.item.id}
+Quantity:           ${data.item.qty}
+Price:              $${data.item.price}
+
+Encrypted Quantity: ${data.encrypted_quantity}
+Decrypted Quantity: ${data.decrypted_quantity}
+
+Signature Valid:    ${data.signature_valid ? "✅ Valid" : "❌ Invalid"}
+Final Signature (s): ${data.multi_signature}
+Hash (h):            ${data.h}
+LHS:                 ${data.lhs}
+RHS:                 ${data.rhs}
+        `.trim();
+
+        let detailsHTML = `<h3>🧾 Warehouse Signature Components</h3>`;
+        data.warehouse_details.forEach(w => {
+          detailsHTML += `
+<div class="details">
+  <h4>🏷️ ${w.warehouse}</h4>
+  ID (g):     ${w.g}<br>
+  t<sub>i</sub>:     ${w.t_i}<br>
+  s<sub>i</sub>:     ${w.s_i}
+</div>
+          `;
+        });
+        detailsDiv.innerHTML = detailsHTML;
+
+      } catch (err) {
+        out.innerHTML = `<span class="invalid">❌ Fetch error: ${err.message}</span>`;
+        detailsDiv.innerHTML = '';
       }
     }
   </script>
