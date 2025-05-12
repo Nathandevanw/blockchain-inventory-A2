@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import hashlib, json, os
-from tabulate import tabulate
 
 with open("backend_part 2/task 3/task3_key_parameters.json") as f:
     keys = json.load(f)
