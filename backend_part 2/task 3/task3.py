@@ -1,41 +1,49 @@
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import hashlib, json, os
-from consensus import run_consensus_bft
 
-# === Load key parameters from JSON ===
-with open("backend_part1/task3_key_params.json") as f:
-    key_data = json.load(f)
-
-# Extract PKG keys
-p_pkg = key_data["PKG"]["p"]
-q_pkg = key_data["PKG"]["q"]
-e_pkg = key_data["PKG"]["e"]
+p_pkg = 1004162036461488639338597000466705179253226703
+q_pkg = 950133741151267522116252385927940618264103623
+e_pkg = 973028207197278907211
 n_pkg = p_pkg * q_pkg
 phi_pkg = (p_pkg - 1) * (q_pkg - 1)
 d_pkg = pow(e_pkg, -1, phi_pkg)
 
-# Procurement Officer keys
-po_p = key_data["ProcurementOfficer"]["p"]
-po_q = key_data["ProcurementOfficer"]["q"]
-po_e = key_data["ProcurementOfficer"]["e"]
+po_p = 1080954735722463992988394149602856332100628417
+po_q = 1158106283320086444890911863299879973542293243
+po_e = 106506253943651610547613
 po_n = po_p * po_q
 po_phi = (po_p - 1) * (po_q - 1)
 po_d = pow(po_e, -1, po_phi)
 
-IDs = key_data["IDs"]
-Randoms = key_data["Randoms"]
-NodeKeys = key_data["NodeKeys"]
+IDs = {
+    "Inventory_A": 126,
+    "Inventory_B": 127,
+    "Inventory_C": 128,
+    "Inventory_D": 129
+}
+Randoms = {
+    "Inventory_A": 621,
+    "Inventory_B": 721,
+    "Inventory_C": 821,
+    "Inventory_D": 921
+}
+NodeKeys = {
+    "Inventory_A": {"p": 953, "q": 1031, "e": 17},
+    "Inventory_B": {"p": 941, "q": 1091, "e": 17},
+    "Inventory_C": {"p": 967, "q": 1061, "e": 17},
+    "Inventory_D": {"p": 971, "q": 1049, "e": 17}
+}
 WAREHOUSES = list(IDs.keys())
 
 app = Flask(__name__)
 CORS(app)
 
-# === Helper Functions ===
 def md5_hash(val): return int(hashlib.md5(str(val).encode()).hexdigest(), 16)
 def powmod(a, b, mod): return pow(a, b, mod)
 def rsa_encrypt(msg, e, n): return pow(int.from_bytes(str(msg).encode(), 'big'), e, n)
-def rsa_decrypt(cipher, d, n): 
+def rsa_decrypt(cipher, d, n):
     m = pow(cipher, d, n)
     return int.from_bytes(m.to_bytes((m.bit_length() + 7) // 8, 'big'), 'big')
 def generate_g(ID): return powmod(ID, d_pkg, n_pkg)
@@ -49,48 +57,32 @@ def verify_signature(s, t, h):
     rhs = (compute_aggregate(IDs.values()) * powmod(t, h, n_pkg)) % n_pkg
     return lhs == rhs, lhs, rhs
 
-# === Flask route ===
 @app.route("/query_item", methods=["POST"])
 def query_item():
     try:
         req = request.get_json()
-        item_id = req.get("item_id")
+        item_id = str(req.get("item_id")).strip()
         matched_records = []
 
-        inventory_folder = "backend_part1/inventory_data"
-        files = ["backend_part1/inventory_data/Inventory_A.json", "backend_part1/inventory_data/Inventory_B.json", "backend_part1/inventory_data/Inventory_C.json", "backend_part1/inventory_data/Inventory_D.json"]
+        inventory_folder = "inventory_data"
+        files = ["Inventory_A.json", "Inventory_B.json", "Inventory_C.json", "Inventory_D.json"]
 
         for fname in files:
             path = os.path.join(inventory_folder, fname)
-            warehouse = fname.replace(".json", "")  # e.g., Inventory_A
-            if os.path.exists(path):
-                with open(path) as f:
-                    records = json.load(f)
-                    for record in records:
-                        if record.get("id") == item_id:
-                            record["location"] = warehouse  # override with correct file name
-                            matched_records.append((warehouse, record))
+            warehouse = fname.replace(".json", "")
+            with open(path) as f:
+                records = json.load(f)
+                for r in records:
+                    if str(r.get("id")).strip() == item_id:
+                        r["location"] = warehouse
+                        matched_records.append((warehouse, r))
 
         if not matched_records:
             return jsonify({"error": "Item not found in any warehouse"}), 404
 
         selected_node, item = matched_records[0]
-        record_str = f"{item['id']}-{item['qty']}-{item['price']}-{item['location']}"
-        signature = int(item.get("sig", 0))
-
-        def verify_signature_fn(proposer, message, sig):
-            k = NodeKeys[proposer]
-            n = k["p"] * k["q"]
-            e = k["e"]
-            m = int.from_bytes(message.encode(), "big")
-            return pow(sig, e, n) == m
-
-        pbft_result = run_consensus_bft(selected_node, record_str, signature, verify_signature_fn)
-
-        if not pbft_result["consensus"]:
-            return jsonify({"error": "PBFT consensus failed", "pbft_votes": pbft_result}), 403
-
         g_list, t_list, s_list, warehouse_details = [], [], [], []
+
         for node in WAREHOUSES:
             ID = IDs[node]
             r = Randoms[node]
@@ -99,11 +91,7 @@ def query_item():
             g_list.append(g)
             t_list.append(t)
             warehouse_details.append({
-                "warehouse": node,
-                "ID": ID,
-                "r": r,
-                "g": g,
-                "t_i": t
+                "warehouse": node, "ID": ID, "r": r, "g": g, "t_i": t
             })
 
         t_agg = compute_aggregate(t_list)
@@ -130,7 +118,6 @@ def query_item():
             "h": str(h),
             "lhs": str(lhs),
             "rhs": str(rhs),
-            "pbft_votes": pbft_result,
             "warehouse_details": warehouse_details
         })
 

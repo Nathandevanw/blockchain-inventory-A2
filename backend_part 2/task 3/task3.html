@@ -1,0 +1,31 @@
+
+<!DOCTYPE html>
+<html>
+<head><title>Task 3 Query</title></head>
+<body>
+  <h2>Query Inventory (Multi-sign + RSA)</h2>
+  <input id="itemId" placeholder="Item ID (e.g. 001)" />
+  <button onclick="query()">Query</button>
+  <pre id="output">—</pre>
+<script>
+async function query() {
+  const id = document.getElementById("itemId").value.trim();
+  const out = document.getElementById("output");
+  out.textContent = "Loading...";
+  try {
+    const res = await fetch("http://127.0.0.1:5000/query_item", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ item_id: id })
+    });
+    const text = await res.text();
+    let data = JSON.parse(text);
+    if (!res.ok) return out.textContent = "❌ " + (data.error || "Unknown error");
+    out.textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    out.textContent = "❌ Fetch error: " + err.message;
+  }
+}
+</script>
+</body>
+</html>
