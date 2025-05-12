@@ -16,13 +16,14 @@
   <h1>📦 Task 1 – Add New Inventory Record</h1>
 
   <label>Select Inventory Node:</label>
-  <select id="node">
-    <option></option>
-    <option>Inventory_A</option>
-    <option>Inventory_B</option>
-    <option>Inventory_C</option>
-    <option>Inventory_D</option>
-  </select>
+<select id="node">
+  <option></option>
+  <option>NodeA</option>
+  <option>NodeB</option>
+  <option>NodeC</option>
+  <option>NodeD</option>
+</select>
+
 
   <label>Item ID:</label>
   <input id="itemId" placeholder="e.g. 001">
@@ -38,7 +39,7 @@
   <h3>Response:</h3>
   <pre id="output">—</pre>
 
-  <script>
+<script>
   async function addRecord() {
     const node  = document.getElementById('node').value;
     const id    = document.getElementById('itemId').value;
@@ -46,7 +47,7 @@
     const price = Number(document.getElementById('price').value);
     const out   = document.getElementById('output');
 
-    if (!node||!id||!qty||isNaN(price)) {
+    if (!node || !id || !qty || isNaN(price)) {
       out.innerHTML = '<span class="invalid">Please fill in all fields.</span>';
       return;
     }
@@ -64,20 +65,66 @@
         return;
       }
 
+      let peerDetails = Object.entries(data.details).map(([peer, d]) => {
+        let decryptedHex = d.decrypted_signature
+          ? BigInt(d.decrypted_signature).toString(16)
+          : 'N/A';
+        let hashHex = d.expected_hash
+          ? BigInt(d.expected_hash).toString(16)
+          : 'N/A';
+
+        return `
+          <tr>
+            <td>${peer}</td>
+            <td>${decryptedHex}</td>
+            <td>${hashHex}</td>
+            <td>${d.matched === null ? '—' : d.matched ? '✅' : '❌'}</td>
+          </tr>
+        `;
+      }).join('');
+
       out.innerHTML = `
 <div class="badge">✅ Consensus reached!</div>
+<b>Node:</b> ${data.node}<br>
+<b>Item ID:</b> ${data.record.id}<br>
+<b>Quantity:</b> ${data.record.qty}<br>
+<b>Price:</b> $${data.record.price}<br>
 
-Node:      ${data.node}
-Item ID:   ${data.record.id}
-Quantity:  ${data.record.qty}
-Price:     $${data.record.price}
+<hr>
+<b>p:</b> ${data.p}<br>
+<b>q:</b> ${data.q}<br>
+<b>φ(n):</b> ${data.phi}<br>
+<b>n:</b> ${data.modulus_n}<br>
+<b>e:</b> ${data.public_e}<br>
+<b>d:</b> ${data.private_d}<br>
+<b>SHA-256 Hash:</b> ${data.hash_int}<br>
+<b>Signature:</b> ${data.signature}<br>
 
+<hr>
+<b>Formulas:</b><br>
+φ(n) = (p - 1) × (q - 1) = (${data.p} - 1) × (${data.q} - 1) = ${data.phi}<br>
+d = e⁻¹ mod φ(n) = ${data.public_e}⁻¹ mod ${data.phi} = ${data.private_d}<br>
+n = p × q = ${data.p} × ${data.q} = ${data.modulus_n}<br><br>
 
+<b>Signature Verification:</b><br>
+signature^e mod n == hash<br>
+${data.signature}^${data.public_e} mod ${data.modulus_n} = ${data.hash_int}<br>
+
+<hr>
+<table border="1" cellpadding="5">
+  <thead><tr><th>Peer</th><th>Decrypted Hash (hex)</th><th>Original Hash (hex)</th><th>Match</th></tr></thead>
+  <tbody>
+    ${peerDetails}
+  </tbody>
+</table>
       `;
+
     } catch (err) {
       out.innerHTML = `<span class="invalid">Fetch error: ${err.message}</span>`;
     }
   }
-  </script>
+</script>
+
+
 </body>
 </html>

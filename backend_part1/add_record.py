@@ -2,7 +2,6 @@ import os, json
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from Crypto.Hash import SHA256
-
 from consensus import run_consensus_bft, VALIDATORS
 
 app = Flask(
@@ -12,33 +11,39 @@ app = Flask(
 )
 CORS(app)
 
-# Load RSA keys
-KEYS_PATH = os.path.join(os.path.dirname(__file__), 'keys.json')
-with open(KEYS_PATH, encoding='utf-8-sig') as f:
-    KEY_DATA = json.load(f)
-
+# === Load RSA key for a given node ===
 def derive_keys(node):
-    p,q,e = (int(KEY_DATA[node][k]) for k in ('p','q','e'))
-    n = p*q; phi=(p-1)*(q-1); d = pow(e, -1, phi)
-    return n, e, d
+    path = os.path.join(os.path.dirname(__file__), f"{node}.json")
+    with open(path, encoding='utf-8-sig') as f:
+        key = json.load(f)
+    p, q, e = int(key["p"]), int(key["q"]), int(key["e"])
+    n = p * q
+    phi = (p - 1) * (q - 1)
+    d = pow(e, -1, phi)
+    return n, e, d, p, q, phi
 
+# === RSA Sign ===
 def sign_record(node, rec_str):
-    n,e,d = derive_keys(node)
-    h = SHA256.new(rec_str.encode()).digest()
-    return pow(int.from_bytes(h,'big'), d, n)
+    n, e, d, p, q, phi = derive_keys(node)
+    h_bytes = SHA256.new(rec_str.encode()).digest()
+    h_int = int.from_bytes(h_bytes, 'big')
+    sig = pow(h_int, d, n)
+    return sig, h_int, n, d, e, p, q, phi
 
+# === RSA Verify ===
 def verify_signature(node, rec_str, sig):
-    n,e,d = derive_keys(node)
+    n, e, *_ = derive_keys(node)
     h = SHA256.new(rec_str.encode()).digest()
-    return pow(sig, e, n) == int.from_bytes(h,'big')
+    return pow(sig, e, n) == int.from_bytes(h, 'big')
 
 
+# === Ensure inventory data dir & files ===
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'inventory_data')
 os.makedirs(DATA_DIR, exist_ok=True)
 for n in VALIDATORS:
     p = os.path.join(DATA_DIR, f"{n}.json")
     if not os.path.exists(p):
-        with open(p,'w') as f:
+        with open(p, 'w') as f:
             json.dump([], f)
 
 @app.route('/')
@@ -47,22 +52,20 @@ def index():
 
 @app.route('/add_record', methods=['POST'])
 def add_record():
-    data   = request.json
-    node   = data.get('node')
-    record = data.get('record')  # {"id","qty","price"}
+    data = request.json
+    node = data.get('node')
+    record = data.get('record')
 
-    # 1) Validate
     if node not in VALIDATORS or not record \
-       or any(k not in record for k in ('id','qty','price')):
+       or any(k not in record for k in ('id', 'qty', 'price')):
         return jsonify(error="Invalid input"), 400
 
-    # 2) Sign & self-verify
     rec_str = json.dumps(record, sort_keys=True)
-    sig     = sign_record(node, rec_str)
+    sig, h_int, n, d, e, p, q, phi = sign_record(node, rec_str)
+
     if not verify_signature(node, rec_str, sig):
         return jsonify(error="Signature failed"), 500
 
-    # 3) Consensus
     result = run_consensus_bft(node, rec_str, sig, verify_signature)
     if not result["consensus"]:
         return jsonify(
@@ -72,36 +75,66 @@ def add_record():
             consensus=False
         ), 403
 
-    # 4) Append to each node’s DB
+    # Append record to each validator's inventory file
     for peer in VALIDATORS:
         dbf = os.path.join(DATA_DIR, f"{peer}.json")
         ledger = json.load(open(dbf))
         ledger.append({
-            "id":       record["id"],
-            "qty":      record["qty"],
-            "price":    record["price"],
+            "id": record["id"],
+            "qty": record["qty"],
+            "price": record["price"],
             "location": node,
-            "sig":      sig
+            "sig": sig
         })
-        with open(dbf,'w') as f:
+        with open(dbf, 'w') as f:
             json.dump(ledger, f, indent=2)
 
-    # 5) Log to records.txt
-    rec_line = f"{node},{record['qty']},{record['price']},{node}\n"
-    with open(os.path.join(os.path.dirname(__file__),'records.txt'),'a') as rf:
-        rf.write(rec_line)
+    # Append signature verification result to each node's file
+    for peer in VALIDATORS:
+        log_entry = {
+            "record_id": record["id"],
+            "sig_from": node,
+            "sig_value": str(sig),
+            "verified": result["verifications"][peer]
+        }
+        peer_file = os.path.join(os.path.dirname(__file__), f"{peer}.json")
+        if os.path.exists(peer_file):
+            with open(peer_file, 'r+', encoding='utf-8') as f:
+                try:
+                    peer_data = json.load(f)
+                    if isinstance(peer_data, dict):
+                        peer_data.setdefault("verifications", []).append(log_entry)
+                    elif isinstance(peer_data, list):
+                        peer_data = {"records": peer_data, "verifications": [log_entry]}
+                except json.JSONDecodeError:
+                    peer_data = {"verifications": [log_entry]}
+                f.seek(0)
+                json.dump(peer_data, f, indent=2)
+                f.truncate()
 
-    # 6) Return info
+    # Log to records.txt
+    with open(os.path.join(os.path.dirname(__file__), 'records.txt'), 'a') as rf:
+        rf.write(f"{node},{record['qty']},{record['price']},{node}\n")
     return jsonify({
-        "status":        "accepted",
-        "consensus":     True,
-        "prepare_votes": result["prepare_votes"],
-        "commit_votes":  result["commit_votes"],
-        "signature":     str(sig),
-        "node":          node,
-        "record":        record
-    })
+    "status": "accepted",
+    "consensus": True,
+    "prepare_votes": result["prepare_votes"],
+    "commit_votes": result["commit_votes"],
+    "verifications": result["verifications"],
+    "details": result["details"],  # 👈 added for frontend signature comparison
+    "signature": str(sig),
+    "hash_int": str(h_int),
+    "modulus_n": str(n),
+    "private_d": str(d),
+    "public_e": str(e),
+    "p": str(p),
+    "q": str(q),
+    "phi": str(phi),
+    "node": node,
+    "record": record
+})
+
 
 if __name__ == '__main__':
-    print("Server at http://127.0.0.1:s5000")
-    app.run(debug=True)
+    print("✅ Server running at: http://127.0.0.1:5000")
+    app.run(debug=True, port=5000)
