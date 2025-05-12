@@ -18,8 +18,13 @@ Inventory_A,32,12,Inventory_A
 Inventory_A,32,12,Inventory_A
 Inventory_A,32,12,Inventory_A
 Inventory_A,32,12,Inventory_A
+<<<<<<< HEAD
 Inventory_A,20,14,Inventory_A
 Inventory_A,22,16,Inventory_A
 Inventory_A,12,18,Inventory_A
 Inventory_A,32,12,Inventory_A
 Inventory_A,32,12,Inventory_A
+=======
+Inventory_C,12,12,Inventory_C
+Inventory_C,12,8,Inventory_C
+>>>>>>> 81454f5ad92858dd3a2cbd521e477770b94e7ca6
