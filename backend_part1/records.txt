@@ -18,8 +18,16 @@ Inventory_A,32,12,Inventory_A
 Inventory_A,32,12,Inventory_A
 Inventory_A,32,12,Inventory_A
 Inventory_A,32,12,Inventory_A
+<<<<<<< HEAD
+Inventory_A,20,14,Inventory_A
+Inventory_A,22,16,Inventory_A
+Inventory_A,12,18,Inventory_A
+Inventory_A,32,12,Inventory_A
+Inventory_A,32,12,Inventory_A
+=======
 Inventory_C,12,12,Inventory_C
 Inventory_C,12,8,Inventory_C
+<<<<<<< HEAD
 Inventory_B,12,20,Inventory_B
 NodeB,32,12,NodeB
 NodeA,32,12,NodeA
@@ -39,3 +47,6 @@ NodeA,32,12,NodeA
 NodeB,20,14,NodeB
 NodeC,22,16,NodeC
 NodeD,12,18,NodeD
+=======
+>>>>>>> 81454f5ad92858dd3a2cbd521e477770b94e7ca6
+>>>>>>> a4af574359d45ad943e255d4d4aff55e331b5d91
