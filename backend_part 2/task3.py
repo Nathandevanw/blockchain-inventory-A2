@@ -2,28 +2,34 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import hashlib, json, os
 
-with open("backend_part 2/task 3/task3_key_parameters.json") as f:
-    keys = json.load(f)
-
-PKG = keys["PKG"]
-PO = keys["ProcurementOfficer"]
-INVENTORIES = keys["Inventories"]
-
-p_pkg, q_pkg, e_pkg = PKG["p"], PKG["q"], PKG["e"]
-n_pkg = p_pkg * q_pkg
-phi_pkg = (p_pkg - 1) * (q_pkg - 1)
-d_pkg = pow(e_pkg, -1, phi_pkg)
-
-po_p, po_q, po_e = PO["p"], PO["q"], PO["e"]
-po_n = po_p * po_q
-po_phi = (po_p - 1) * (po_q - 1)
-po_d = pow(po_e, -1, po_phi)
-
 app = Flask(__name__)
 CORS(app)
 
-def md5_hash(val):
-    return int(hashlib.md5(str(val).encode()).hexdigest(), 16)
+def load_keys():
+    with open("PKG.json") as f:
+        PKG = json.load(f)
+    with open("Officer.json") as f:
+        PO = json.load(f)
+    with open("Inventory_Identity.json") as f:
+        INVENTORIES = json.load(f)
+    return {"PKG": PKG, "ProcurementOfficer": PO, "Inventories": INVENTORIES}
+
+def load_pkg_keys(PKG):
+    p, q, e = PKG["p"], PKG["q"], PKG["e"]
+    n = p * q
+    phi = (p - 1) * (q - 1)
+    d = pow(e, -1, phi)
+    return p, q, e, n, d
+
+def load_po_keys(PO):
+    p, q, e = PO["p"], PO["q"], PO["e"]
+    n = p * q
+    phi = (p - 1) * (q - 1)
+    d = pow(e, -1, phi)
+    return p, q, e, n, d
+
+def sha256_hash(val):
+    return int(hashlib.sha256(str(val).encode()).hexdigest(), 16)
 
 def powmod(a, b, mod):
     return pow(a, b, mod)
@@ -35,13 +41,13 @@ def rsa_decrypt(cipher, d, n):
     m = pow(cipher, d, n)
     return int.from_bytes(m.to_bytes((m.bit_length() + 7) // 8, 'big'), 'big')
 
-def generate_g(ID):
+def generate_g(ID, d_pkg, n_pkg):
     return powmod(ID, d_pkg, n_pkg)
 
-def generate_t(r):
+def generate_t(r, e_pkg, n_pkg):
     return powmod(r, e_pkg, n_pkg)
 
-def compute_aggregate(values):
+def compute_aggregate(values, n_pkg):
     result = 1
     for v in values:
         result = (result * v) % n_pkg
@@ -59,6 +65,14 @@ def most_common_value(values):
 @app.route("/query_item", methods=["POST"])
 def query_item():
     try:
+        keys = load_keys()
+        PKG = keys["PKG"]
+        PO = keys["ProcurementOfficer"]
+        INVENTORIES = keys["Inventories"]
+
+        p_pkg, q_pkg, e_pkg, n_pkg, d_pkg = load_pkg_keys(PKG)
+        po_p, po_q, po_e, po_n, po_d = load_po_keys(PO)
+
         req = request.get_json()
         item_id = str(req.get("item_id")).strip()
         votes = []
@@ -66,7 +80,7 @@ def query_item():
         warehouse_details = []
         g_list, s_list = [], []
 
-        inventory_folder = "backend_part 2/task 3/inventory_data"
+        inventory_folder = "backend_part1/inventory_data"
         files = [f"{w}.json" for w in INVENTORIES.keys()]
         inventory_data = {}
         for fname in files:
@@ -93,9 +107,9 @@ def query_item():
 
             ID = INVENTORIES[warehouse]["ID"]
             r = INVENTORIES[warehouse]["r"]
-            g = generate_g(ID)
-            t = generate_t(r)
-            h = md5_hash(str(t) + str(majority_qty))
+            g = generate_g(ID, d_pkg, n_pkg)
+            t = generate_t(r, e_pkg, n_pkg)
+            h = sha256_hash(str(t) + str(majority_qty))
 
             if vote == "Approve":
                 s = (g * powmod(r, h, n_pkg)) % n_pkg
@@ -118,10 +132,10 @@ def query_item():
         if approves < 3:
             return jsonify({"error": "Consensus failed"}), 400
 
-        s_agg = compute_aggregate(s_list)
-        g_agg = compute_aggregate(g_list)
-        t_total = compute_aggregate([generate_t(INVENTORIES[w]["r"]) for w in signed_nodes])
-        h_total = md5_hash(str(t_total) + str(majority_qty))
+        s_agg = compute_aggregate(s_list, n_pkg)
+        g_agg = compute_aggregate(g_list, n_pkg)
+        t_total = compute_aggregate([generate_t(INVENTORIES[w]["r"], e_pkg, n_pkg) for w in signed_nodes], n_pkg)
+        h_total = sha256_hash(str(t_total) + str(majority_qty))
 
         lhs = powmod(s_agg, e_pkg, n_pkg)
         rhs = (g_agg * powmod(t_total, h_total, n_pkg)) % n_pkg
@@ -130,10 +144,19 @@ def query_item():
         encrypted_qty = rsa_encrypt(majority_qty, po_e, po_n)
         decrypted_qty = rsa_decrypt(encrypted_qty, po_d, po_n)
 
-        # TABLE PRINT FOR DEMO
-        table_data = [[d["warehouse"], d["ID"], d["r"], d["g"], d["t"], d["vote"]] for d in warehouse_details]
-        headers = ["Warehouse", "ID", "r", "g", "t", "Vote"]
-        print(tabulate(table_data, headers=headers, tablefmt="grid"))
+        debug_data = {
+            "PKG": {"p": p_pkg, "q": q_pkg, "e": e_pkg, "n": n_pkg, "d": d_pkg},
+            "Officer": {"p": po_p, "q": po_q, "e": po_e, "n": po_n, "d": po_d},
+            "signed_nodes": signed_nodes,
+            "g_list": g_list,
+            "s_list": s_list,
+            "s_agg": s_agg,
+            "g_agg": g_agg,
+            "t_total": t_total,
+            "h_total": h_total,
+            "lhs": lhs,
+            "rhs": rhs
+        }
 
         return jsonify({
             "item_id": item_id,
@@ -144,10 +167,12 @@ def query_item():
             "multi_signature": s_agg,
             "verification": {"lhs": lhs, "rhs": rhs, "valid": valid},
             "encrypted_quantity": str(encrypted_qty),
-            "decrypted_quantity": decrypted_qty
+            "decrypted_quantity": decrypted_qty,
+            "debug_data": debug_data
         })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+
+    except Exception:
+        return jsonify({"error": "Internal server error"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
