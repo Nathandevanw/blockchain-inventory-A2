@@ -1,29 +1,96 @@
 <!DOCTYPE html>
 <html>
-<head><title>Task 3 Query</title></head>
+<head>
+    <title>Task 3 - Query Result (Table Version)</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h2 { color: #333; }
+        table, th, td { border: 1px solid black; border-collapse: collapse; }
+        th, td { padding: 8px 12px; text-align: center; }
+        table { margin-bottom: 20px; }
+        input { padding: 8px; width: 150px; margin-right: 10px; }
+        button { padding: 8px 15px; }
+    </style>
+</head>
 <body>
-  <h2>Query Inventory (Multi-sign + RSA)</h2>
-  <input id="itemId" placeholder="Item ID (e.g. 001)" />
-  <button onclick="query()">Query</button>
-  <pre id="output">—</pre>
+    <h2>Task 3: Secure Inventory Query</h2>
+    <input id="itemId" placeholder="Enter Item ID (e.g. 001)" />
+    <button onclick="query()">Query</button>
+
+    <h3>Votes</h3>
+    <table id="voteTable">
+        <thead>
+            <tr><th>Warehouse</th><th>Vote</th></tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <h3>Warehouse Signature Details</h3>
+    <table id="detailsTable">
+        <thead>
+            <tr>
+                <th>Warehouse</th><th>ID</th><th>r</th><th>g</th><th>t</th><th>Vote</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div id="results"></div>
+
 <script>
 async function query() {
-  const id = document.getElementById("itemId").value.trim();
-  const out = document.getElementById("output");
-  out.textContent = "Loading...";
-  try {
-    const res = await fetch("http://127.0.0.1:5000/query_item", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ item_id: id })
-    });
-    const text = await res.text();
-    let data = JSON.parse(text);
-    if (!res.ok) return out.textContent = "❌ " + (data.error || "Unknown error");
-    out.textContent = JSON.stringify(data, null, 2);
-  } catch (err) {
-    out.textContent = "❌ Fetch error: " + err.message;
-  }
+    const id = document.getElementById("itemId").value.trim();
+    const voteBody = document.querySelector("#voteTable tbody");
+    const detailsBody = document.querySelector("#detailsTable tbody");
+    const resultDiv = document.getElementById("results");
+    voteBody.innerHTML = "";
+    detailsBody.innerHTML = "";
+    resultDiv.innerHTML = "";
+
+    try {
+        const res = await fetch("http://127.0.0.1:5000/query_item", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ item_id: id })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+            resultDiv.innerHTML = `<p style="color:red;">Error: ${data.error}</p>`;
+            return;
+        }
+
+        // Populate Votes Table
+        data.votes.forEach(v => {
+            voteBody.innerHTML += `<tr><td>${v.warehouse}</td><td>${v.vote}</td></tr>`;
+        });
+
+        // Populate Signature Details Table
+        data.warehouse_details.forEach(d => {
+            detailsBody.innerHTML += `<tr>
+                <td>${d.warehouse}</td>
+                <td>${d.ID}</td>
+                <td>${d.r}</td>
+                <td>${d.g}</td>
+                <td>${d.t}</td>
+                <td>${d.vote}</td>
+            </tr>`;
+        });
+
+        // Show Multi-Signature + Verification + Encrypted Values
+        resultDiv.innerHTML = `
+            <h3>Results</h3>
+            <p><b>Item ID:</b> ${data.item_id}</p>
+            <p><b>Quantity (Majority):</b> ${data.majority_qty}</p>
+            <p><b>Signed Nodes:</b> ${data.signed_nodes.join(", ")}</p>
+            <p><b>Multi-Signature:</b> ${data.multi_signature}</p>
+            <p><b>Verification:</b> ${data.verification.valid ? "✅ VALID" : "❌ INVALID"}</p>
+            <p><b>Encrypted Quantity:</b> ${data.encrypted_quantity}</p>
+            <p><b>Decrypted Quantity:</b> ${data.decrypted_quantity}</p>
+        `;
+    } catch (err) {
+        resultDiv.innerHTML = `<p style="color:red;">Fetch Error: ${err}</p>`;
+    }
 }
 </script>
 </body>

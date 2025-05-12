@@ -1,8 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import hashlib, json, os
+from tabulate import tabulate
 
-# === Load keys from file ===
 with open("backend_part 2/task 3/task3_key_parameters.json") as f:
     keys = json.load(f)
 
@@ -48,6 +48,15 @@ def compute_aggregate(values):
         result = (result * v) % n_pkg
     return result
 
+def get_local_quantity(warehouse, item_id, inventory_data):
+    for record in inventory_data[warehouse]:
+        if str(record["id"]) == item_id:
+            return record["qty"]
+    return None
+
+def most_common_value(values):
+    return max(set(values), key=values.count)
+
 @app.route("/query_item", methods=["POST"])
 def query_item():
     try:
@@ -58,10 +67,9 @@ def query_item():
         warehouse_details = []
         g_list, s_list = [], []
 
-        inventory_folder = "inventory_data"
+        inventory_folder = "backend_part 2/task 3/inventory_data"
         files = [f"{w}.json" for w in INVENTORIES.keys()]
         inventory_data = {}
-
         for fname in files:
             warehouse = fname.replace(".json", "")
             path = os.path.join(inventory_folder, fname)
@@ -69,18 +77,18 @@ def query_item():
                 inventory_data[warehouse] = json.load(f)
 
         quantities = []
-        for warehouse, records in inventory_data.items():
-            for record in records:
-                if str(record["id"]) == item_id:
-                    quantities.append(record["qty"])
+        for warehouse in INVENTORIES.keys():
+            qty = get_local_quantity(warehouse, item_id, inventory_data)
+            if qty is not None:
+                quantities.append(qty)
+
         if not quantities:
             return jsonify({"error": "Item not found"}), 404
-        majority_qty = max(set(quantities), key=quantities.count)
+
+        majority_qty = most_common_value(quantities)
 
         for warehouse in INVENTORIES.keys():
-            records = inventory_data[warehouse]
-            match = next((r for r in records if str(r["id"]) == item_id), None)
-            local_qty = match["qty"] if match else None
+            local_qty = get_local_quantity(warehouse, item_id, inventory_data)
             vote = "Approve" if local_qty == majority_qty else "Reject"
             votes.append({"warehouse": warehouse, "vote": vote})
 
@@ -107,8 +115,9 @@ def query_item():
                 "s_partial": s if vote == "Approve" else None
             })
 
-        if not s_list:
-            return jsonify({"error": "No valid signatures, consensus failed"}), 400
+        approves = sum(1 for v in votes if v["vote"] == "Approve")
+        if approves < 3:
+            return jsonify({"error": "Consensus failed"}), 400
 
         s_agg = compute_aggregate(s_list)
         g_agg = compute_aggregate(g_list)
@@ -122,6 +131,11 @@ def query_item():
         encrypted_qty = rsa_encrypt(majority_qty, po_e, po_n)
         decrypted_qty = rsa_decrypt(encrypted_qty, po_d, po_n)
 
+        # TABLE PRINT FOR DEMO
+        table_data = [[d["warehouse"], d["ID"], d["r"], d["g"], d["t"], d["vote"]] for d in warehouse_details]
+        headers = ["Warehouse", "ID", "r", "g", "t", "Vote"]
+        print(tabulate(table_data, headers=headers, tablefmt="grid"))
+
         return jsonify({
             "item_id": item_id,
             "majority_qty": majority_qty,
@@ -133,7 +147,6 @@ def query_item():
             "encrypted_quantity": str(encrypted_qty),
             "decrypted_quantity": decrypted_qty
         })
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
