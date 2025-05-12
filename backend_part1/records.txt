@@ -15,3 +15,8 @@ Inventory_A,32,12,Inventory_A
 Inventory_A,32,12,Inventory_A
 Inventory_A,32,12,Inventory_A
 Inventory_A,32,12,Inventory_A
+Inventory_A,32,12,Inventory_A
+Inventory_A,32,12,Inventory_A
+Inventory_A,32,12,Inventory_A
+Inventory_C,12,12,Inventory_C
+Inventory_C,12,8,Inventory_C
