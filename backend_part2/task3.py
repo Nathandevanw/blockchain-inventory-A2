@@ -1,42 +1,62 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import hashlib
+import json
 
 app = Flask(__name__)
 CORS(app)
 
-# --- Key Setup based on List of Keys document ---
+# === Step 1: Load data from external files ===
 
-# PKG Keys
-p_pkg = 1004162036461488639338597000466705179253226703
-q_pkg = 950133741151267522116252385927940618264103623
-e_pkg = 973028207197278907211
+with open("backend_part2/pkg_keys.json") as f:
+    pkg_data = json.load(f)
+
+with open("backend_part2/procurement_officer_keys.json") as f:
+    po_data = json.load(f)
+
+with open("backend_part2/ids_randoms.json") as f:
+    id_random_data = json.load(f)
+
+# Warehouse inventory data
+with open("backend_part1/inventory_data/NodeA.json") as f:
+    inventory_A = json.load(f)
+with open("backend_part1/inventory_data/NodeB.json") as f:
+    inventory_B = json.load(f)
+with open("backend_part1/inventory_data/NodeC.json") as f:
+    inventory_C = json.load(f)
+with open("backend_part1/inventory_data/NodeD.json") as f:
+    inventory_D = json.load(f)
+
+warehouse_inventories = {
+    "Inventory_A": inventory_A,
+    "Inventory_B": inventory_B,
+    "Inventory_C": inventory_C,
+    "Inventory_D": inventory_D
+}
+
+# === Step 2: Assign key variables ===
+
+# PKG
+p_pkg = pkg_data["p"]
+q_pkg = pkg_data["q"]
+e_pkg = pkg_data["e"]
 n_pkg = p_pkg * q_pkg
 phi_pkg = (p_pkg - 1) * (q_pkg - 1)
 d_pkg = pow(e_pkg, -1, phi_pkg)
 
-# Procurement Officer Keys
-po_p = 1080954735722463992988394149602856332100628417
-po_q = 1158106283320086444890911863299879973542293243
-po_e = 106506253943651610547613
+# Procurement Officer
+po_p = po_data["p"]
+po_q = po_data["q"]
+po_e = po_data["e"]
 po_n = po_p * po_q
 po_phi = (po_p - 1) * (po_q - 1)
 po_d = pow(po_e, -1, po_phi)
 
-# Inventory IDs and Randoms
-IDs = {"Inventory_A": 126, "Inventory_B": 127, "Inventory_C": 128, "Inventory_D": 129}
-Randoms = {"Inventory_A": 621, "Inventory_B": 721, "Inventory_C": 821, "Inventory_D": 921}
-warehouse_list = ["Inventory_A", "Inventory_B", "Inventory_C", "Inventory_D"]
+IDs = id_random_data["IDs"]
+Randoms = id_random_data["Randoms"]
+warehouse_list = list(IDs.keys())
 
-# Simple Inventory Database
-item_db = {
-    "001": {"qty": 32, "price": 12, "location": "D"},
-    "002": {"qty": 20, "price": 14, "location": "C"},
-    "003": {"qty": 22, "price": 16, "location": "B"},
-    "004": {"qty": 12, "price": 18, "location": "A"}
-}
-
-# --- Helper Cryptographic Functions ---
+# === Step 3: Helper functions ===
 
 def md5_hash(value):
     return int(hashlib.md5(str(value).encode()).hexdigest(), 16)
@@ -78,56 +98,48 @@ def verify_signature(s, t, h):
     rhs = (id_product * powmod(t, h, n_pkg)) % n_pkg
     return lhs == rhs, lhs, rhs
 
-# --- Proof of Authority (PoA) Consensus ---
+# === Step 4: PoA consensus ===
 
-REQUIRED_APPROVALS = 3  # Need 3 out of 4 nodes to agree
+REQUIRED_APPROVALS = 3
 
 def validate_record(record, node_name):
-    """
-    Each warehouse checks if the quantity is realistic (for demo purposes, qty <= 1000).
-    """
     return int(record["qty"]) <= 1000
 
 def simulate_consensus(record):
-    """
-    PoA consensus: each trusted node votes.
-    Consensus reached if at least 3 approvals.
-    """
     votes = {}
     for node in warehouse_list:
         votes[node] = validate_record(record, node)
-
     approvals = sum(votes.values())
-    consensus_reached = approvals >= REQUIRED_APPROVALS
+    return approvals >= REQUIRED_APPROVALS, votes
 
-    return consensus_reached, votes
-
-# --- Flask API Endpoint for Item Query ---
+# === Step 5: Flask route ===
 
 @app.route("/query_item", methods=["POST"])
 def query():
     item_id = request.json.get("item_id")
-    item = item_db.get(item_id)
+    nodeA_items = warehouse_inventories["Inventory_A"]
+    item = next((i for i in nodeA_items if i["id"] == item_id), None)
 
     if not item:
         return jsonify({"error": "Item ID not found"}), 404
 
-    # First: Simulate PoA consensus
     consensus_reached, votes = simulate_consensus(item)
-
     if not consensus_reached:
-        return jsonify({"error": "Consensus failed. Query rejected."}), 403
+        return jsonify({"error": "Consensus failed."}), 403
 
-    # If consensus OK: proceed with multi-signature
     g_list, t_list, s_list = [], [], []
     result_details = []
 
     for name in warehouse_list:
+        node_inventory = warehouse_inventories[name]
+        node_item = next((i for i in node_inventory if i["id"] == item_id), None)
+        if not node_item:
+            return jsonify({"error": f"Item {item_id} not found in {name}."}), 404
+
         ID = IDs[name]
         r = Randoms[name]
         g = generate_g(ID)
         t = generate_t(r)
-
         g_list.append(g)
         t_list.append(t)
 
@@ -136,7 +148,8 @@ def query():
             "ID": ID,
             "r": r,
             "g": g,
-            "t_i": t
+            "t_i": t,
+            "location": node_item["location"]
         })
 
     t = compute_aggregate_t(t_list)
@@ -151,13 +164,12 @@ def query():
     s = compute_aggregate_s(s_list)
     valid, lhs, rhs = verify_signature(s, t, h)
 
-    # Encrypt quantity before sending
     encrypted = rsa_encrypt(item["qty"], po_e, po_n)
     decrypted = rsa_decrypt(encrypted, po_d, po_n)
 
     return jsonify({
         "itemId": item_id,
-        "item": item,
+        "item": {"qty": item["qty"], "price": item["price"], "location": item["location"]},
         "signature": str(s),
         "t": str(t),
         "hash": str(h),

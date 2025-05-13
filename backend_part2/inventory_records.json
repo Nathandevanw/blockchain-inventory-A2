@@ -1,0 +1,6 @@
+{
+  "001": { "qty": 32, "price": 12, "location": "D" },
+  "002": { "qty": 20, "price": 14, "location": "C" },
+  "003": { "qty": 22, "price": 16, "location": "B" },
+  "004": { "qty": 12, "price": 18, "location": "A" }
+}
