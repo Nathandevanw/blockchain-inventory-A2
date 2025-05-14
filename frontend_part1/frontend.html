@@ -42,6 +42,8 @@
 <script>
   async function addRecord() {
     const node  = document.getElementById('node').value;
+    const validators = ["NodeA", "NodeB", "NodeC", "NodeD"];
+    const verifiers = validators.filter(n => n !== node);
     const id    = document.getElementById('itemId').value;
     const qty   = Number(document.getElementById('qty').value);
     const price = Number(document.getElementById('price').value);
@@ -68,24 +70,26 @@
       let peerDetails = Object.entries(data.details).map(([peer, d]) => {
         let decryptedHex = d.decrypted_signature
           ? BigInt(d.decrypted_signature).toString(16)
-          : 'N/A';
+          : 'Signer no need for verification';
         let hashHex = d.expected_hash
           ? BigInt(d.expected_hash).toString(16)
-          : 'N/A';
+          : 'Signer no need for verification';
 
         return `
           <tr>
             <td>${peer}</td>
             <td>${decryptedHex}</td>
             <td>${hashHex}</td>
-            <td>${d.matched === null ? '—' : d.matched ? '✅' : '❌'}</td>
+            <td>${d.matched === null ? '—' : d.matched ? 'Yes' : 'No'}</td>
           </tr>
         `;
       }).join('');
 
       out.innerHTML = `
-<div class="badge">✅ Consensus reached!</div>
+<div class="badge"> Consensus reached!</div>
 <b>Node:</b> ${data.node}<br>
+<b>Signer:</b> ${data.node}<br>
+<b>Verifying Nodes:</b> ${["NodeA", "NodeB", "NodeC", "NodeD"].filter(n => n !== data.node).join(", ")}<br>
 <b>Item ID:</b> ${data.record.id}<br>
 <b>Quantity:</b> ${data.record.qty}<br>
 <b>Price:</b> $${data.record.price}<br>
@@ -109,6 +113,10 @@ n = p × q = ${data.p} × ${data.q} = ${data.modulus_n}<br><br>
 <b>Signature Verification:</b><br>
 signature^e mod n == hash<br>
 ${data.signature}^${data.public_e} mod ${data.modulus_n} = ${data.hash_int}<br>
+
+<b>Signer:</b> NodeB<br>
+<b>Verifying Nodes:</b> NodeA, NodeC, NodeD<br>
+
 
 <hr>
 <table border="1" cellpadding="5">
