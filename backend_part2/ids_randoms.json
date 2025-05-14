@@ -1,0 +1,14 @@
+{
+  "IDs": {
+    "Inventory_A": 126,
+    "Inventory_B": 127,
+    "Inventory_C": 128,
+    "Inventory_D": 129
+  },
+  "Randoms": {
+    "Inventory_A": 621,
+    "Inventory_B": 721,
+    "Inventory_C": 821,
+    "Inventory_D": 921
+  }
+}

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Inventory Multi-Signature Query</title>
+  <style>
+    body { font-family: Arial; padding: 2rem; background: #f8f8f8; }
+    label, select, button { margin-top: 1rem; display: block; }
+    button { background-color: #007acc; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; }
+    button:hover { background-color: #005fa3; }
+    table { margin-top: 1.5rem; border-collapse: collapse; width: 100%; }
+    th, td { padding: 8px; border: 1px solid #ccc; text-align: center; }
+    th { background-color: #f0f0f0; }
+    pre { background: #eee; padding: 1rem; border-radius: 6px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h2>Task 3 - Inventory Query & Verification</h2>
+
+  <label for="itemId">Choose Item ID:</label>
+  <select id="itemId">
+    <option value="001">Item 001</option>
+    <option value="002">Item 002</option>
+    <option value="003">Item 003</option>
+    <option value="004">Item 004</option>
+  </select>
+
+  <button onclick="queryItem()">Submit Query</button>
+
+  <div id="output"></div>
+
+  <script>
+    async function queryItem() {
+      const itemId = document.getElementById('itemId').value;
+      const output = document.getElementById('output');
+      output.innerHTML = 'Querying...';
+
+      try {
+        const res = await fetch('http://localhost:5000/query_item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_id: itemId })
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+          output.innerHTML = `<p style="color:red">${data.error}</p>`;
+          return;
+        }
+
+        const tableRows = data.warehouses.map(w => `
+          <tr>
+            <td>${w.warehouse}</td>
+            <td>${w.ID}</td>
+            <td>${w.r}</td>
+            <td>${w.g}</td>
+            <td>${w.t_i}</td>
+            <td>${w.s_i}</td>
+          </tr>`).join('');
+
+        const consensusRows = Object.keys(data.consensus_votes).map(wh => `
+          <tr>
+            <td>${wh}</td>
+            <td>${data.consensus_votes[wh] ? '✅ Approve' : '❌ Reject'}</td>
+          </tr>`).join('');
+
+        output.innerHTML = `
+          <h3>Item Info</h3>
+          <p><strong>ID:</strong> ${data.itemId}</p>
+          <p><strong>Quantity:</strong> ${data.item.qty}</p>
+          <p><strong>Price:</strong> $${data.item.price}</p>
+          <p><strong>Location:</strong> ${data.item.location}</p>
+
+          <h3>Warehouse Signatures</h3>
+          <table>
+            <tr><th>Warehouse</th><th>ID</th><th>r</th><th>g</th><th>t</th><th>s</th></tr>
+            ${tableRows}
+          </table>
+
+          <h3>Consensus Voting</h3>
+          <table>
+            <tr><th>Warehouse</th><th>Vote</th></tr>
+            ${consensusRows}
+          </table>
+
+          <p><strong>Consensus Result:</strong> ${data.consensus_result ? '✅ Achieved' : '❌ Failed'}</p>
+
+          <h3>Multi-Signature & RSA Verification</h3>
+          <pre>
+Encrypted Quantity:
+- Decimal: ${data.encrypted_quantity}
+- Hex: 0x${BigInt(data.encrypted_quantity).toString(16)}
+
+Signature:
+- Decimal: ${data.signature}
+- Hex: 0x${BigInt(data.signature).toString(16)}
+t:
+- Decimal: ${data.t}
+- Hex: 0x${BigInt(data.t).toString(16)}
+Hash:
+- Decimal: ${data.hash}
+- Hex: 0x${BigInt(data.hash).toString(16)}
+
+Decrypted Quantity:
+- Decimal: ${data.decrypted_quantity}
+- Hex: 0x${BigInt(data.decrypted_quantity).toString(16)}
+
+LHS: ${data.lhs}
+RHS: ${data.rhs}
+Verification: ${data.valid ? "✅ VALID" : "❌ INVALID"}
+          </pre>`;
+      } catch (err) {
+        output.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
+      }
+    }
+  </script>
+</body>
+</html>
