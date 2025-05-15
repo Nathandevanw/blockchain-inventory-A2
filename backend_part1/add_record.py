@@ -60,7 +60,7 @@ def add_record():
        or any(k not in record for k in ('id', 'qty', 'price')):
         return jsonify(error="Invalid input"), 400
 
-    rec_str = json.dumps(record, sort_keys=True)
+    rec_str = f"{record['id']}{record['qty']}{record['price']}{node}"
     sig, h_int, n, d, e, p, q, phi = sign_record(node, rec_str)
 
     if not verify_signature(node, rec_str, sig):
