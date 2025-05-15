@@ -42,7 +42,7 @@ warehouse_files = {
 }
 warehouses = list(warehouse_files.keys())
 
-# NEW: use inventory files not hardcoded data
+# NEW: load inventory files
 with open("backend_part1/inventory_data/NodeA.json") as f:
     inventory_A = json.load(f)
 with open("backend_part1/inventory_data/NodeB.json") as f:
@@ -59,7 +59,7 @@ warehouse_inventories = {
     "Inventory_D": inventory_D
 }
 
-# Crypto Functions
+# ------------------- Crypto Functions -------------------
 def md5_hash(value):
     return int(hashlib.md5(str(value).encode()).hexdigest(), 16)
 
@@ -76,10 +76,9 @@ def powmod(x, y, z):
 
 def generate_g(ID):
     return powmod(ID, d_pkg, n_pkg)
-
-#  Warehouse Signature Simulation
+# ------------------- Warehouse Signature Simulation -------------------
 def get_all_ids():
-    """ Read IDs from warehouse JSON files. """
+    """ Simulates warehouses sending their ID to PKG """
     ids = {}
     for name, file in warehouse_files.items():
         data = read_json(file)
@@ -87,18 +86,17 @@ def get_all_ids():
     return ids
 
 def pkg_generate_g():
-    """ PKG calculates g for each warehouse and updates warehouse JSON file """
-    ids = get_all_ids()
+    """ PKG receives ID from warehouses, calculates g, sends g back to warehouses """
     for name in warehouses:
         file = warehouse_files[name]
         data = read_json(file)
-        ID = ids[name]
-        g = generate_g(ID)
-        data["g"] = g
+        ID = data["ID"]               # warehouse sends ID to PKG
+        g = generate_g(ID)            # PKG calculates g
+        data["g"] = g                 # PKG sends g back
         write_json(file, data)
 
-def warehouse_partial_signature(h, ids):
-    """ Each warehouse calculates s_i and shares it to all warehouse files """
+def warehouse_partial_signature(h):
+    """ Each warehouse calculates partial signature s_i and shares to all warehouse files """
     for signer in warehouses:
         file = warehouse_files[signer]
         data = read_json(file)
@@ -108,7 +106,7 @@ def warehouse_partial_signature(h, ids):
         data["s_i"] = s_i
         write_json(file, data)
 
-    # simulate writing s_i to all other warehouse files
+    # Simulate warehouses exchanging all s_i values with each other
     s_values = {}
     for signer in warehouses:
         s_values[signer] = read_json(warehouse_files[signer])["s_i"]
@@ -120,7 +118,7 @@ def warehouse_partial_signature(h, ids):
         write_json(file, data)
 
 def calculate_aggregate_signature(data):
-    
+    """ Each warehouse calculates s_total = product of all s_i """
     s_total = 1
     for val in data["all_s_i"].values():
         s_total = (s_total * val) % n_pkg
@@ -130,6 +128,7 @@ def calculate_aggregate_signature(data):
 @app.route("/query_item", methods=["POST"])
 def query():
     item_id = request.json.get("item_id")
+
     # Step 1: Find item from any warehouse
     found_item = None
     for inventory in warehouse_inventories.values():
@@ -139,15 +138,13 @@ def query():
                 break
         if found_item:
             break
-
     if not found_item:
         return jsonify({"error": "Item ID not found"}), 404
 
     # Step 2: PKG calculates g for each warehouse
     pkg_generate_g()
 
-    # Step 3: Calculate t values for each warehouse
-    ids = get_all_ids()
+    # Step 3: Each warehouse calculates t_i = r^e mod n
     t_values = {}
     for name in warehouses:
         file = warehouse_files[name]
@@ -156,20 +153,20 @@ def query():
         t_i = powmod(r, e_pkg, n_pkg)
         t_values[name] = t_i
 
-    # Step 4: Warehouses calculate t_total
+    # Step 4: Calculate t_total
     t_total = 1
     for val in t_values.values():
         t_total = (t_total * val) % n_pkg
 
-    # Step 5: PKG generates h
+    # Step 5: PKG generates h = MD5(t_total || qty)
     h = md5_hash(str(t_total) + str(found_item["qty"]))
 
-    # Step 6: Warehouses calculate partial signatures s_i and distribute
-    warehouse_partial_signature(h, ids)
+    # Step 6: Warehouses calculate partial signatures s_i and share
+    warehouse_partial_signature(h)
 
-    # Step 7: Warehouses calculate s_total and send to PKG
+    # Step 7: Each warehouse calculates s_total and sends to PKG for verification
     warehouse_results = []
-    pkg_s = None
+    reference_s = None
     for name in warehouses:
         file = warehouse_files[name]
         data = read_json(file)
@@ -185,21 +182,19 @@ def query():
             "s_i": data["s_i"],
             "s_total": s_total
         })
+        if reference_s is None:
+            reference_s = s_total
 
-    # Step 8: PKG calculates official s
-    pkg_s = 1
-    for name in warehouses:
-        pkg_s = (pkg_s * read_json(warehouse_files[name])["s_i"]) % n_pkg
+    # Step 8: PKG checks if all warehouses sent same s_total
+    consensus_result = all([w["s_total"] == reference_s for w in warehouse_results])
 
-    # Step 9: PKG verifies all warehouse s_total match
-    consensus_result = all([w["s_total"] == pkg_s for w in warehouse_results])
-
-    # Step 10: PKG encrypts message and sends to Officer
+    # Step 9: PKG encrypts quantity and sends to Officer
     encrypted_qty = rsa_encrypt(found_item["qty"], po_e, po_n)
     decrypted_qty = rsa_decrypt(encrypted_qty, po_d, po_n)
 
-    # Step 11: Officer verifies signature
-    lhs = powmod(pkg_s, e_pkg, n_pkg)
+    # Step 10: Officer verifies final signature
+    lhs = powmod(reference_s, e_pkg, n_pkg)
+    ids = get_all_ids()
     id_product = 1
     for val in ids.values():
         id_product = (id_product * val) % n_pkg
@@ -221,7 +216,7 @@ def query():
         "decrypted_quantity": str(decrypted_qty),
         "t_total": str(t_total),
         "hash": str(h),
-        "signature": str(pkg_s),
+        "signature": str(reference_s),
         "lhs": str(lhs),
         "rhs": str(rhs),
         "valid": valid,
@@ -231,4 +226,4 @@ def query():
     })
 
 if __name__ == "__main__":
-    app.run(debug=False)
+    app.run(debug=False)  
