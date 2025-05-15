@@ -37,18 +37,13 @@
       try {
         const res = await fetch('http://localhost:5000/query_item', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ item_id: itemId })
-        });
-        const data = await res.json();
-        if (data.error) { output.innerHTML = `<p style="color:red">${data.error}</p>`; return; }
+          headers: {sdfor) { output.innerHTML = `<p style="color:red">${data.error}</p>`; return; }
 
         let html = `<h3>Step 1: PKG key generation (p, q, n, phi, e, d)</h3>
 <pre>
 p = ${BigInt(data.pkg_keys.p).toString()}
 q = ${BigInt(data.pkg_keys.q).toString()}
 n = ${BigInt(data.pkg_keys.n).toString()}
-phi(n) = ${BigInt(data.pkg_keys.phi_n).toString()}
 e = ${BigInt(data.pkg_keys.e).toString()}
 d = ${BigInt(data.pkg_keys.d).toString()}
 PKG Public Key = (e,n) = (${BigInt(data.pkg_keys.e).toString()}, ${BigInt(data.pkg_keys.n).toString()})
