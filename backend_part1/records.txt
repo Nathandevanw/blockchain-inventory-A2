@@ -50,3 +50,6 @@ NodeD,12,18,NodeD
 =======
 >>>>>>> 81454f5ad92858dd3a2cbd521e477770b94e7ca6
 >>>>>>> a4af574359d45ad943e255d4d4aff55e331b5d91
+NodeA,32,12,NodeA
+NodeA,32,12,NodeA
+NodeA,33,20,NodeA

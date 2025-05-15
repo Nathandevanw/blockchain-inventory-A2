@@ -2,129 +2,133 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Task 1 – Add & Sign Inventory Record</title>
+  <title>Task 3 - Inventory Multi-Signature Query</title>
   <style>
-    body{font-family:Arial;padding:2rem;background:#e8e8e8}
-    label,select,input,button{display:block;margin:0.5rem 0;font-size:1rem}
-    pre{background:#eee;padding:1rem;border-radius:4px;white-space:pre-wrap}
-    .invalid{color:red} .valid{color:green}
-    .badge{font-size:1.1rem;padding:0.5rem;background:#d4edda;color:#155724;
-           border:1px solid #c3e6cb;border-radius:4px;display:inline-block}
+    body { font-family: Arial, sans-serif; padding: 2rem; }
+    label, select, button { margin-top: 1rem; display: block; }
+    table { margin-top: 2rem; border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background-color: #f5f5f5; }
+    pre { background: #f0f0f0; padding: 1rem; overflow-x: auto; }
   </style>
 </head>
 <body>
-  <h1>📦 Task 1 – Add New Inventory Record</h1>
+  <h1>Task 3 - Inventory Multi-Signature Query</h1>
 
-  <label>Select Inventory Node:</label>
-<select id="node">
-  <option></option>
-  <option>NodeA</option>
-  <option>NodeB</option>
-  <option>NodeC</option>
-  <option>NodeD</option>
-</select>
+  <label for="itemId">Select Item ID:</label>
+  <select id="itemId">
+    <option value="001">Item 001</option>
+    <option value="002">Item 002</option>
+    <option value="003">Item 003</option>
+    <option value="004">Item 004</option>
+  </select>
+  <button onclick="queryItem()">Submit Query</button>
 
+  <div id="output"></div>
 
-  <label>Item ID:</label>
-  <input id="itemId" placeholder="e.g. 001">
+  <script>
+    async function queryItem() {
+      const itemId = document.getElementById('itemId').value;
+      const output = document.getElementById('output');
+      output.innerHTML = '<p>Querying...</p>';
 
-  <label>Quantity:</label>
-  <input id="qty" type="number" placeholder="e.g. 32">
+      try {
+        const res = await fetch('http://localhost:5000/query_item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_id: itemId })
+        });
 
-  <label>Price:</label>
-  <input id="price" type="number" step="0.01" placeholder="e.g. 12.00">
+        const data = await res.json();
+        if (data.error) {
+          output.innerHTML = `<p style="color:red">${data.error}</p>`;
+          return;
+        }
 
-  <button onclick="addRecord()">Sign & Submit</button>
-
-  <h3>Response:</h3>
-  <pre id="output">—</pre>
-
-<script>
-  async function addRecord() {
-    const node  = document.getElementById('node').value;
-    const id    = document.getElementById('itemId').value;
-    const qty   = Number(document.getElementById('qty').value);
-    const price = Number(document.getElementById('price').value);
-    const out   = document.getElementById('output');
-
-    if (!node || !id || !qty || isNaN(price)) {
-      out.innerHTML = '<span class="invalid">Please fill in all fields.</span>';
-      return;
-    }
-    out.textContent = 'Signing…';
-
-    try {
-      const res = await fetch('http://localhost:5000/add_record', {
-        method:  'POST',
-        headers: {'Content-Type':'application/json'},
-        body:    JSON.stringify({ node, record:{ id, qty, price } })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        out.innerHTML = `<span class="invalid">Error: ${data.error}</span>`;
-        return;
-      }
-
-      let peerDetails = Object.entries(data.details).map(([peer, d]) => {
-        let decryptedHex = d.decrypted_signature
-          ? BigInt(d.decrypted_signature).toString(16)
-          : 'N/A';
-        let hashHex = d.expected_hash
-          ? BigInt(d.expected_hash).toString(16)
-          : 'N/A';
-
-        return `
-          <tr>
-            <td>${peer}</td>
-            <td>${decryptedHex}</td>
-            <td>${hashHex}</td>
-            <td>${d.matched === null ? '—' : d.matched ? '✅' : '❌'}</td>
-          </tr>
+        // ---- Display Item Info ----
+        let html = `
+          <h3>Item Info</h3>
+          <p><strong>ID:</strong> ${data.itemId}</p>
+          <p><strong>Quantity:</strong> ${data.item.qty}</p>
+          <p><strong>Price:</strong> $${data.item.price}</p>
+          <p><strong>Location:</strong> ${data.item.location}</p>
         `;
-      }).join('');
 
-      out.innerHTML = `
-<div class="badge">✅ Consensus reached!</div>
-<b>Node:</b> ${data.node}<br>
-<b>Item ID:</b> ${data.record.id}<br>
-<b>Quantity:</b> ${data.record.qty}<br>
-<b>Price:</b> $${data.record.price}<br>
+        // ---- Show Warehouse Signatures ----
+        html += `<h3>Warehouse Partial Signatures + Calculation</h3>`;
+        data.warehouses.forEach((w, i) => {
+          html += `
+            <pre>
+Warehouse: ${w.warehouse}
 
-<hr>
-<b>p:</b> ${data.p}<br>
-<b>q:</b> ${data.q}<br>
-<b>φ(n):</b> ${data.phi}<br>
-<b>n:</b> ${data.modulus_n}<br>
-<b>e:</b> ${data.public_e}<br>
-<b>d:</b> ${data.private_d}<br>
-<b>SHA-256 Hash:</b> ${data.hash_int}<br>
-<b>Signature:</b> ${data.signature}<br>
+Step 1: Generate g
+g = ID^d mod n
+g = ${w.g}
 
-<hr>
-<b>Formulas:</b><br>
-φ(n) = (p - 1) × (q - 1) = (${data.p} - 1) × (${data.q} - 1) = ${data.phi}<br>
-d = e⁻¹ mod φ(n) = ${data.public_e}⁻¹ mod ${data.phi} = ${data.private_d}<br>
-n = p × q = ${data.p} × ${data.q} = ${data.modulus_n}<br><br>
+Step 2: Generate t
+t = r^e mod n
+t = ${w.t_i}
 
-<b>Signature Verification:</b><br>
-signature^e mod n == hash<br>
-${data.signature}^${data.public_e} mod ${data.modulus_n} = ${data.hash_int}<br>
+Step 3: Compute h
+h = MD5(t || quantity)
+h = ${data.hash}
 
-<hr>
-<table border="1" cellpadding="5">
-  <thead><tr><th>Peer</th><th>Decrypted Hash (hex)</th><th>Original Hash (hex)</th><th>Match</th></tr></thead>
-  <tbody>
-    ${peerDetails}
-  </tbody>
-</table>
-      `;
+Step 4: Compute partial signature
+s_${i+1} = g * r^h mod n
+s_${i+1} = ${w.s_i}
+            </pre>`;
+        });
 
-    } catch (err) {
-      out.innerHTML = `<span class="invalid">Fetch error: ${err.message}</span>`;
+        // ---- Distributed Signature Check ----
+        const s_partials = data.warehouses.map(w => BigInt(w.s_i));
+        const aggregate_s = s_partials.reduce((acc, val) => acc * val % BigInt(data.rhs), BigInt(1));
+
+        html += `
+          <h3>Final Multi-Signature Calculation (by PKG)</h3>
+          <pre>
+s = s_1 * s_2 * s_3 * s_4 mod n
+s = ${data.signature}
+          </pre>
+        `;
+
+        // ---- Show Encryption / Decryption ----
+        html += `
+          <h3>PKG → Procurement Officer Encryption</h3>
+          <pre>
+Encryption Formula:
+C = M^e mod n
+C = ${data.encrypted_quantity}
+
+Procurement Officer Decryption:
+M = C^d mod n
+M = ${data.decrypted_quantity}
+          </pre>
+        `;
+
+        // ---- Show Verification ----
+        html += `
+          <h3>Signature Verification</h3>
+          <pre>
+Step 1: Compute LHS
+LHS = s^e mod n
+LHS = ${data.lhs}
+
+Step 2: Compute RHS
+RHS = (ID_1 * ID_2 * ID_3 * ID_4) * t^h mod n
+RHS = ${data.rhs}
+
+Result: ${data.valid ? '✅ VALID' : '❌ INVALID'}
+          </pre>
+
+          <h3>Consensus Result</h3>
+          <p>${data.consensus_result ? '✅ Consensus PASSED' : '❌ Consensus FAILED'}</p>
+        `;
+
+        output.innerHTML = html;
+      } catch (err) {
+        output.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
+      }
     }
-  }
-</script>
-
-
+  </script>
 </body>
 </html>
