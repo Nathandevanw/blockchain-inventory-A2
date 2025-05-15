@@ -2,18 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Task 3 - DLT Inventory Query</title>
+  <title>DLT Inventory Query - Task 3</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 2rem; }
-    label, select, button { margin-top: 1rem; display: block; }
-    table { margin-top: 2rem; border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    th { background-color: #f5f5f5; }
-    pre { background: #f0f0f0; padding: 1rem; overflow-x: auto; }
+    body { font-family: 'Segoe UI', sans-serif; padding: 2rem; background: #f8f8f8; color: #333; }
+    h2, h3 { color: #222; }
+    label, select, button { display: block; margin-top: 1rem; font-size: 1rem; }
+    table { margin-top: 1.5rem; border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+    th, td { padding: 8px; border: 1px solid #ccc; text-align: center; }
+    th { background-color: #f0f0f0; }
+    pre { background: #eee; padding: 1rem; border-radius: 6px; white-space: pre-wrap; font-size: 0.85rem; }
   </style>
 </head>
 <body>
-  <h1>Task 3 - Full DLT Simulation with PKG + Officer</h1>
+  <h2>Task 3 - Secure DLT Inventory Query System</h2>
 
   <label for="itemId">Select Item ID:</label>
   <select id="itemId">
@@ -24,12 +25,15 @@
   </select>
   <button onclick="queryItem()">Submit Query</button>
 
-  <div id="output"></div>
+  <div id="output" style="margin-top:2rem;"></div>
 
   <script>
-    
+
+    window.addEventListener("beforeunload", function() {
+    localStorage.setItem("lastOutput", document.getElementById("output").innerHTML);
+    });
     window.addEventListener("load", function() {
-      if (localStorage.getItem("lastOutput")) {
+    if (localStorage.getItem("lastOutput")) {
         document.getElementById("output").innerHTML = localStorage.getItem("lastOutput");
       }
     });
@@ -37,7 +41,7 @@
     async function queryItem() {
       const itemId = document.getElementById('itemId').value;
       const output = document.getElementById('output');
-      output.innerHTML = '<p>Querying...</p>';
+      output.innerHTML = 'Please wait...';
 
       try {
         const res = await fetch('http://localhost:5000/query_item', {
@@ -45,103 +49,96 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ item_id: itemId })
         });
-
         const data = await res.json();
-        if (data.error) {
-          output.innerHTML = `<p style="color:red">${data.error}</p>`;
-          return;
-        }
+        if (data.error) { output.innerHTML = `<p style="color:red">${data.error}</p>`; return; }
 
-        let html = `<h3>PKG Key Generation</h3>
-        <pre>
-p = ${BigInt(data.p).toString()}
-q = ${BigInt(data.q).toString()}
-e = ${BigInt(data.e).toString()}
-n = p * q = ${BigInt(data.n).toString()}
-phi(n) = (p-1)*(q-1) = ${BigInt(data.phi_n).toString()}
+        let html = `<h3>Step 1: PKG Key Setup</h3>
+<p>PKG calculates its key pair (public & private keys).</p>
+<pre>
+n = p × q = ${BigInt(data.n).toString()}
+phi(n) = (p - 1)(q - 1) = ${BigInt(data.phi_n).toString()}
 d = e⁻¹ mod phi(n) = ${BigInt(data.d).toString()}
+PKG Public Key = (e,n) = (${BigInt(data.e).toString()}, ${BigInt(data.n).toString()})
+PKG Private Key = (d,n) = (${BigInt(data.d).toString()}, ${BigInt(data.n).toString()})
+</pre>`;
 
-PKG Public Key = (e, n) = (${BigInt(data.e).toString()}, ${BigInt(data.n).toString()})
-PKG Private Key = (d, n) = (${BigInt(data.d).toString()}, ${BigInt(data.n).toString()})
-        </pre>`;
+        html += `<h3>Step 2: Item Found</h3>
+<p>PKG receives item query and finds the item in warehouse database.</p>
+<pre>
+Item ID: ${data.itemId}
+Quantity: ${data.item.qty}
+Price: ${data.item.price}
+Location: ${data.item.location}
+</pre>`;
 
-        html += `<h3>Item Information</h3>
-        <p><strong>Item ID:</strong> ${data.itemId}</p>
-        <p><strong>Quantity:</strong> ${data.item.qty}</p>
-        <p><strong>Price:</strong> $${data.item.price}</p>
-        <p><strong>Location:</strong> ${data.item.location}</p>`;
-
-        html += `<h3>Warehouse Calculations</h3>`;
+        html += `<h3>Step 3: Warehouse Signature Setup</h3>
+<p>Warehouses send IDs to PKG; PKG calculates g = ID^d mod n.</p>`;
         data.warehouses.forEach(w => {
           html += `
 <pre>
 Warehouse: ${w.warehouse}
-ID: ${BigInt(w.ID).toString()}
-Random r: ${BigInt(w.random).toString()}
-
-PKG signed g = ID^d mod n
-g = ${BigInt(w.g).toString()}
-
-Warehouse calculates t = r^e mod n
-t = ${BigInt(w.t_i).toString()}
+ID = ${w.ID}
+Random r = ${w.random}
+g = ID^d mod n = ${BigInt(w.g).toString()}
 </pre>`;
         });
 
-        const t_total = BigInt(data.t_total);
-        html += `<pre>
-All warehouses multiply t values to get t_total:
-t_total = ${t_total.toString()}
-        </pre>`;
-        html += `<h3>Partial Signatures</h3>`;
+        html += `<h3>Step 4: Warehouses Generate tᵢ Values</h3>
+<p>Each warehouse calculates tᵢ = r^e mod n.</p>`;
         data.warehouses.forEach(w => {
           html += `
 <pre>
 Warehouse: ${w.warehouse}
-Each warehouse calculates hash:
-h = MD5(t_total || quantity)
+tᵢ = ${BigInt(w.t_i).toString()}
+</pre>`;
+        });
+
+        html += `<h3>Step 5: PKG Calculates Hash</h3>
+<p>PKG computes h = MD5(t_total || qty).</p>
+<pre>
+t_total = ${BigInt(data.t_total).toString()}
 h = ${BigInt(data.hash).toString()}
-
-Warehouse partial signature:
-s_i = g * r^h mod n
-s_i = ${BigInt(w.s_i).toString()}
 </pre>`;
-        });
 
-        html += `<h3>Each Warehouse Calculates s_total</h3>`;
+        html += `<h3>Step 6: Warehouse Partial Signatures</h3>
+<p>Each warehouse calculates sᵢ = g × r^h mod n.</p>`;
         data.warehouses.forEach(w => {
           html += `
 <pre>
 Warehouse: ${w.warehouse}
-s_total = s1 * s2 * s3 * s4 mod n
+sᵢ = ${BigInt(w.s_i).toString()}
+</pre>`;
+        });
+
+        html += `<h3>Step 7: Warehouses Compute Aggregate Signature</h3>
+<p>All warehouses share sᵢ values and compute s_total = product of all sᵢ mod n.</p>`;
+        data.warehouses.forEach(w => {
+          html += `
+<pre>
+Warehouse: ${w.warehouse}
 s_total = ${BigInt(w.s_total).toString()}
 </pre>`;
         });
 
-        html += `<h3>PKG Final Signature Check</h3>
+        html += `<h3>Step 8: PKG Consensus Check</h3>
+<p>All warehouses send s_total to PKG. PKG checks if all match.</p>
 <pre>
-PKG multiplies all s_i to get its s:
-PKG s = ${BigInt(data.signature).toString()}
-
-Consensus Result: ${data.consensus_result ? " All warehouses matched PKG s → Consensus PASSED" : " Mismatch detected → Consensus FAILED"}
+Consensus Result: ${data.consensus_result ? "✅ PASSED (all match)" : "❌ FAILED (mismatch found)"}
 </pre>`;
-        html += `<h3>PKG Encrypts and Officer Decrypts</h3>
+
+        html += `<h3>Step 9: Officer Verification</h3>
+<p>PKG encrypts qty; Officer decrypts & verifies signature.</p>
 <pre>
-PKG encrypts quantity for Officer:
-C = M^e mod n
-Encrypted Quantity = ${BigInt(data.encrypted_quantity).toString()}
+PKG encrypts qty:
+C = qty^e mod n → C = ${BigInt(data.encrypted_quantity).toString()}
 
 Officer decrypts:
-M = C^d mod n
-Decrypted Quantity = ${BigInt(data.decrypted_quantity).toString()}
-</pre>`;
+M = C^d mod n → M = ${BigInt(data.decrypted_quantity).toString()}
 
-        html += `<h3>Officer Final Signature Verification</h3>
-<pre>
-Officer calculates:
+Officer verifies signature:
 LHS = s^e mod n = ${BigInt(data.lhs).toString()}
-RHS = (ID_product * t_total^h) mod n = ${BigInt(data.rhs).toString()}
-
-Signature Verification Result: ${data.valid ? "VALID (signature matches)" : " INVALID (signature does not match)"}
+RHS = product(IDs) × t_total^h mod n = ${BigInt(data.rhs).toString()}
+Signature Valid: ${data.valid ? "✅ VALID" : "❌ INVALID"}
 </pre>`;
 
         output.innerHTML = html;
