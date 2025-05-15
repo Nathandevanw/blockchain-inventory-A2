@@ -27,14 +27,12 @@
   <div id="output"></div>
 
   <script>
-    window.addEventListener("beforeunload", function() {
-      localStorage.setItem("lastOutput", document.getElementById("output").innerHTML);
-    });
+    
     window.addEventListener("load", function() {
       if (localStorage.getItem("lastOutput")) {
         document.getElementById("output").innerHTML = localStorage.getItem("lastOutput");
       }
-  });
+    });
 
     async function queryItem() {
       const itemId = document.getElementById('itemId').value;
@@ -124,7 +122,7 @@ s_total = ${BigInt(w.s_total).toString()}
 PKG multiplies all s_i to get its s:
 PKG s = ${BigInt(data.signature).toString()}
 
-Consensus Result: ${data.consensus_result ? "✅ All warehouses matched PKG s → Consensus PASSED" : "❌ Mismatch detected → Consensus FAILED"}
+Consensus Result: ${data.consensus_result ? " All warehouses matched PKG s → Consensus PASSED" : " Mismatch detected → Consensus FAILED"}
 </pre>`;
         html += `<h3>PKG Encrypts and Officer Decrypts</h3>
 <pre>
@@ -143,7 +141,7 @@ Officer calculates:
 LHS = s^e mod n = ${BigInt(data.lhs).toString()}
 RHS = (ID_product * t_total^h) mod n = ${BigInt(data.rhs).toString()}
 
-Signature Verification Result: ${data.valid ? "✅ VALID (signature matches)" : "❌ INVALID (signature does not match)"}
+Signature Verification Result: ${data.valid ? "VALID (signature matches)" : " INVALID (signature does not match)"}
 </pre>`;
 
         output.innerHTML = html;
