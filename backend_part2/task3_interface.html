@@ -23,21 +23,12 @@
     <option value="003">Item 003</option>
     <option value="004">Item 004</option>
   </select>
-  <button onclick="queryItem()">Submit Query</button>
+  <!-- ✅ FIX: type="button" prevents page reload -->
+  <button type="button" onclick="queryItem()">Submit Query</button>
 
   <div id="output" style="margin-top:2rem;"></div>
 
   <script>
-
-    window.addEventListener("beforeunload", function() {
-    localStorage.setItem("lastOutput", document.getElementById("output").innerHTML);
-    });
-    window.addEventListener("load", function() {
-    if (localStorage.getItem("lastOutput")) {
-        document.getElementById("output").innerHTML = localStorage.getItem("lastOutput");
-      }
-    });
-
     async function queryItem() {
       const itemId = document.getElementById('itemId').value;
       const output = document.getElementById('output');

@@ -16,10 +16,14 @@ def derive_keys(node):
     path = os.path.join(os.path.dirname(__file__), f"{node}.json")
     with open(path, encoding='utf-8-sig') as f:
         key = json.load(f)
-    p, q, e = int(key["p"]), int(key["q"]), int(key["e"])
-    n = p * q
-    phi = (p - 1) * (q - 1)
-    d = pow(e, -1, phi)
+
+    p = int(key["p"])
+    q = int(key["q"])
+    e = int(key["e"])
+    n = int(key["n"])
+    phi = int(key["phi(n)"])
+    d = int(key["d"])
+
     return n, e, d, p, q, phi
 
 # === RSA Sign ===
@@ -35,7 +39,6 @@ def verify_signature(node, rec_str, sig):
     n, e, *_ = derive_keys(node)
     h = SHA256.new(rec_str.encode()).digest()
     return pow(sig, e, n) == int.from_bytes(h, 'big')
-
 
 # === Ensure inventory data dir & files ===
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'inventory_data')
@@ -61,6 +64,8 @@ def add_record():
         return jsonify(error="Invalid input"), 400
 
     rec_str = f"{record['id']}{record['qty']}{record['price']}{node}"
+    print("✅ rec_str used for hashing:", rec_str)
+
     sig, h_int, n, d, e, p, q, phi = sign_record(node, rec_str)
 
     if not verify_signature(node, rec_str, sig):
@@ -84,7 +89,7 @@ def add_record():
             "qty": record["qty"],
             "price": record["price"],
             "location": node,
-            "sig": sig
+            "signature": sig
         })
         with open(dbf, 'w') as f:
             json.dump(ledger, f, indent=2)
@@ -93,8 +98,8 @@ def add_record():
     for peer in VALIDATORS:
         log_entry = {
             "record_id": record["id"],
-            "sig_from": node,
-            "sig_value": str(sig),
+            "signed_from": node,
+            "sign_value": str(sig),
             "verified": result["verifications"][peer]
         }
         peer_file = os.path.join(os.path.dirname(__file__), f"{peer}.json")
@@ -112,27 +117,26 @@ def add_record():
                 json.dump(peer_data, f, indent=2)
                 f.truncate()
 
-
     return jsonify({
-    "status": "accepted",
-    "consensus": True,
-    "prepare_votes": result["prepare_votes"],
-    "commit_votes": result["commit_votes"],
-    "verifications": result["verifications"],
-    "details": result["details"],  # 👈 added for frontend signature comparison
-    "signature": str(sig),
-    "hash_int": str(h_int),
-    "modulus_n": str(n),
-    "private_d": str(d),
-    "public_e": str(e),
-    "p": str(p),
-    "q": str(q),
-    "phi": str(phi),
-    "node": node,
-    "record": record
-})
-
+        "status": "accepted",
+        "record_string": rec_str,
+        "consensus": True,
+        "prepare_votes": result["prepare_votes"],
+        "commit_votes": result["commit_votes"],
+        "verifications": result["verifications"],
+        "details": result["details"],
+        "signature": str(sig),
+        "hash_int": str(h_int),
+        "modulus_n": str(n),
+        "private_d": str(d),
+        "public_e": str(e),
+        "p": str(p),
+        "q": str(q),
+        "phi": str(phi),
+        "node": node,
+        "record": record
+    })
 
 if __name__ == '__main__':
-    print("✅ Server running at: http://127.0.0.1:5000")
+    print(" Server running at: http://127.0.0.1:5000")
     app.run(debug=True, port=5000)

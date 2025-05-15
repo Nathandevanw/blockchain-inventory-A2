@@ -1,4 +1,3 @@
-# === consensus.py ===
 VALIDATORS = ["NodeA", "NodeB", "NodeC", "NodeD"]
 f = (len(VALIDATORS) - 1) // 3
 QUORUM = 2 * f + 1
@@ -12,7 +11,7 @@ def run_consensus_bft(proposer, record_str, proposer_signature, verify_fn):
     verification_details = {}
 
     # Load proposer's public key
-    key_path = os.path.join(os.path.dirname(__file__), f"{proposer}.json")
+    key_path = os.path.join(os.path.dirname(file), f"{proposer}.json")
     with open(key_path, encoding='utf-8-sig') as f:
         key_data = json.load(f)
     p, q, e = int(key_data["p"]), int(key_data["q"]), int(key_data["e"])
