@@ -45,6 +45,7 @@
           return;
         }
 
+<<<<<<< HEAD
         // ---- Display Item Info ----
         let html = `
           <h3>Item Info</h3>
@@ -52,14 +53,75 @@
           <p><strong>Quantity:</strong> ${data.item.qty}</p>
           <p><strong>Price:</strong> $${data.item.price}</p>
           <p><strong>Location:</strong> ${data.item.location}</p>
+=======
+  <button onclick="addRecord()">Sign & Submit</button>
+
+  <h3>Response:</h3>
+  <pre id="output">—</pre>
+
+<script>
+  async function addRecord() {
+    const node  = document.getElementById('node').value;
+    const validators = ["NodeA", "NodeB", "NodeC", "NodeD"];
+    const verifiers = validators.filter(n => n !== node);
+    const id    = document.getElementById('itemId').value;
+    const qty   = Number(document.getElementById('qty').value);
+    const price = Number(document.getElementById('price').value);
+    const out   = document.getElementById('output');
+
+    if (!node || !id || !qty || isNaN(price)) {
+      out.innerHTML = '<span class="invalid">Please fill in all fields.</span>';
+      return;
+    }
+    out.textContent = 'Signing…';
+
+    try {
+      const res = await fetch('http://localhost:5000/add_record', {
+        method:  'POST',
+        headers: {'Content-Type':'application/json'},
+        body:    JSON.stringify({ node, record:{ id, qty, price } })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        out.innerHTML = `<span class="invalid">Error: ${data.error}</span>`;
+        return;
+      }
+
+      let peerDetails = Object.entries(data.details).map(([peer, d]) => {
+        let decryptedHex = d.decrypted_signature
+          ? BigInt(d.decrypted_signature).toString(16)
+          : 'Signer no need for verification';
+        let hashHex = d.expected_hash
+          ? BigInt(d.expected_hash).toString(16)
+          : 'Signer no need for verification';
+
+        return `
+          <tr>
+            <td>${peer}</td>
+            <td>${decryptedHex}</td>
+            <td>${hashHex}</td>
+            <td>${d.matched === null ? '—' : d.matched ? 'Yes' : 'No'}</td>
+          </tr>
+>>>>>>> b0959fa5d0b159050df6642ff913b847019dcf9b
         `;
 
+<<<<<<< HEAD
         // ---- Show Warehouse Signatures ----
         html += `<h3>Warehouse Partial Signatures + Calculation</h3>`;
         data.warehouses.forEach((w, i) => {
           html += `
             <pre>
 Warehouse: ${w.warehouse}
+=======
+      out.innerHTML = `
+<div class="badge"> Consensus reached!</div>
+<b>Node:</b> ${data.node}<br>
+<b>Signer:</b> ${data.node}<br>
+<b>Verifying Nodes:</b> ${["NodeA", "NodeB", "NodeC", "NodeD"].filter(n => n !== data.node).join(", ")}<br>
+<b>Item ID:</b> ${data.record.id}<br>
+<b>Quantity:</b> ${data.record.qty}<br>
+<b>Price:</b> $${data.record.price}<br>
+>>>>>>> b0959fa5d0b159050df6642ff913b847019dcf9b
 
 Step 1: Generate g
 g = ID^d mod n
@@ -73,11 +135,26 @@ Step 3: Compute h
 h = MD5(t || quantity)
 h = ${data.hash}
 
+<<<<<<< HEAD
 Step 4: Compute partial signature
 s_${i+1} = g * r^h mod n
 s_${i+1} = ${w.s_i}
             </pre>`;
         });
+=======
+<b>Signer:</b> NodeB<br>
+<b>Verifying Nodes:</b> NodeA, NodeC, NodeD<br>
+
+
+<hr>
+<table border="1" cellpadding="5">
+  <thead><tr><th>Peer</th><th>Decrypted Hash (hex)</th><th>Original Hash (hex)</th><th>Match</th></tr></thead>
+  <tbody>
+    ${peerDetails}
+  </tbody>
+</table>
+      `;
+>>>>>>> b0959fa5d0b159050df6642ff913b847019dcf9b
 
         // ---- Distributed Signature Check ----
         const s_partials = data.warehouses.map(w => BigInt(w.s_i));

@@ -112,9 +112,7 @@ def add_record():
                 json.dump(peer_data, f, indent=2)
                 f.truncate()
 
-    # Log to records.txt
-    with open(os.path.join(os.path.dirname(__file__), 'records.txt'), 'a') as rf:
-        rf.write(f"{node},{record['qty']},{record['price']},{node}\n")
+
     return jsonify({
     "status": "accepted",
     "consensus": True,
