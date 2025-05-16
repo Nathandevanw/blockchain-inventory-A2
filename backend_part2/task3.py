@@ -200,8 +200,8 @@ def query_item():
     write_json("backend_part2/response_message.json", response_msg)
 
     # Step 11: PKG encrypts the message (quantity) for Officer using RSA
-    encrypted_m = rsa_encrypt(quantity, e_po, n_po)
-    decrypted_m = rsa_decrypt(encrypted_m, d_po, n_po)
+    encrypted_m = str(rsa_encrypt(quantity, e_po, n_po))
+    decrypted_m = str(rsa_decrypt(encrypted_m, d_po, n_po))
     encryption_result = {
         "Qty": quantity,
         "encrypted_quantity": encrypted_m,
