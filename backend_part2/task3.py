@@ -55,7 +55,7 @@ warehouse_files = {
     "Inventory_C": "backend_part2/Inventory_C_ID.json",
     "Inventory_D": "backend_part2/Inventory_D_ID.json"
 }
-# Optional: Load all inventory data at once for quick access (can be used for lookup/reference)
+# This is to read the quantity input from task 1 and 2
 inventories = {
     "Inventory_A": read_json("backend_part1/inventory_data/NodeA.json"),
     "Inventory_B": read_json("backend_part1/inventory_data/NodeB.json"),
