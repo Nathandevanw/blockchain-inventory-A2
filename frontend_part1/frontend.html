@@ -2,28 +2,66 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Task 1 – Add & Sign Inventory Record</title>
+  <title>Task 1 & task 2 – Add & Sign Inventory Record</title>
+
+  <!-- 
+    This CSS section styles the page with consistent fonts, spacing, and colors.
+    Also defines styles for form elements and output display blocks.
+  -->
   <style>
-    body{font-family:Arial;padding:2rem;background:#e8e8e8}
-    label,select,input,button{display:block;margin:0.5rem 0;font-size:1rem}
-    pre{background:#eee;padding:1rem;border-radius:4px;white-space:pre-wrap}
-    .invalid{color:red} .valid{color:green}
-    .badge{font-size:1.1rem;padding:0.5rem;background:#d4edda;color:#155724;
-           border:1px solid #c3e6cb;border-radius:4px;display:inline-block}
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      background: #e8e8e8;
+    }
+
+    label, select, input, button {
+      display: block;
+      margin: 0.5rem 0;
+      font-size: 1rem;
+    }
+
+    pre {
+      background: #eee;
+      padding: 1rem;
+      border-radius: 4px;
+      white-space: pre-wrap;
+    }
+
+    .invalid {
+      color: red;
+    }
+
+    .valid {
+      color: green;
+    }
+
+    .badge {
+      font-size: 1.1rem;
+      padding: 0.5rem;
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+      border-radius: 4px;
+      display: inline-block;
+    }
   </style>
 </head>
+
 <body>
-<h1>Task 1 and Task 2 – Add Inventory Record with Digital Signature and Consensus Verification</h1>
+  <h1>Task 1 and Task 2 – Add Inventory Record with Digital Signature and Consensus Verification</h1>
 
+  <!-- 
+    Input section: User selects a node and enters inventory data (ID, quantity, price and location which is at the start)
+  -->
   <label>Select Inventory Node:</label>
-<select id="node">
-  <option></option>
-  <option>NodeA</option>
-  <option>NodeB</option>
-  <option>NodeC</option>
-  <option>NodeD</option>
-</select>
-
+  <select id="node">
+    <option></option>
+    <option>NodeA</option>
+    <option>NodeB</option>
+    <option>NodeC</option>
+    <option>NodeD</option>
+  </select>
 
   <label>Item ID:</label>
   <input id="itemId" placeholder="e.g. 001">
@@ -34,62 +72,80 @@
   <label>Price:</label>
   <input id="price" type="number" step="0.01" placeholder="e.g. 12.00">
 
+  <!-- Button triggers the signing and submitting process -->
   <button onclick="addRecord()">Sign & Submit</button>
 
+  <!-- Output area where response and cryptographic details will be shown -->
   <h3>Response:</h3>
   <pre id="output">—</pre>
 
-<script>
-  async function addRecord() {
-    const node  = document.getElementById('node').value;
-    const validators = ["NodeA", "NodeB", "NodeC", "NodeD"];
-    const verifiers = validators.filter(n => n !== node);
-    const id    = document.getElementById('itemId').value;
-    const qty   = Number(document.getElementById('qty').value);
-    const price = Number(document.getElementById('price').value);
-    const out   = document.getElementById('output');
+  <!-- 
+    JavaScript handles submission, request to server, and displays results.
+    Which outputs digital signature generation, verification, and consensus display.
+  -->
+  <script>
+    async function addRecord() {
+      // Get selected node and form input values
+      const node = document.getElementById('node').value;
+      const id = document.getElementById('itemId').value;
+      const qty = Number(document.getElementById('qty').value);
+      const price = Number(document.getElementById('price').value);
+      const out = document.getElementById('output');
 
-    if (!node || !id || !qty || isNaN(price)) {
-      out.innerHTML = '<span class="invalid">Please fill in all fields.</span>';
-      return;
-    }
-    out.textContent = 'Signing…';
+      // Define other validator nodes for verification
+      const validators = ["NodeA", "NodeB", "NodeC", "NodeD"];
+      const verifiers = validators.filter(n => n !== node);
 
-    try {
-      const res = await fetch('http://localhost:5000/add_record', {
-        method:  'POST',
-        headers: {'Content-Type':'application/json'},
-        body:    JSON.stringify({ node, record:{ id, qty, price } })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        out.innerHTML = `<span class="invalid">Error: ${data.error}</span>`;
+      // Basic form validation
+      if (!node || !id || !qty || isNaN(price)) {
+        out.innerHTML = '<span class="invalid">Please fill in all fields.</span>';
         return;
       }
 
-      let peerDetails = Object.entries(data.details).map(([peer, d]) => {
-        let decryptedHex = d.decrypted_signature
-          ? BigInt(d.decrypted_signature).toString(16)
-          : 'Signer no need for verification';
-        let hashHex = d.expected_hash
-          ? BigInt(d.expected_hash).toString(16)
-          : 'Signer no need for verification';
+      out.textContent = 'Signing…';
 
-        return `
-          <tr>
-            <td>${peer}</td>
-            <td>${decryptedHex}</td>
-            <td>${hashHex}</td>
-            <td>${d.matched === null ? '—' : d.matched ? 'Yes' : 'No'}</td>
-          </tr>
-        `;
-      }).join('');
+      try {
+        // Send inventory data to the backend server
+        const res = await fetch('http://localhost:5000/add_record', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ node, record: { id, qty, price } })
+        });
 
-      out.innerHTML = `
-<div class="badge"> Consensus reached!</div>
+        const data = await res.json();
+
+        // Displays error from server if request failed
+        if (!res.ok) {
+          out.innerHTML = `<span class="invalid">Error: ${data.error}</span>`;
+          return;
+        }
+
+        // Build verifier table with decrypted hash and match result
+        let peerDetails = Object.entries(data.details).map(([peer, d]) => {
+          let decryptedHex = d.decrypted_signature
+            ? BigInt(d.decrypted_signature).toString(16)
+            : 'Signer no need for verification';
+
+          let hashHex = d.expected_hash
+            ? BigInt(d.expected_hash).toString(16)
+            : 'Signer no need for verification';
+
+          return `
+            <tr>
+              <td>${peer}</td>
+              <td>${decryptedHex}</td>
+              <td>${hashHex}</td>
+              <td>${d.matched === null ? '—' : d.matched ? 'Yes' : 'No'}</td>
+            </tr>
+          `;
+        }).join('');
+
+        // Display all signing and consensus details, including RSA key values and verification table
+        out.innerHTML = `
+<div class="badge">Consensus reached!</div>
 <b>Node:</b> ${data.node}<br>
 <b>Signer:</b> ${data.node}<br>
-<b>Verifying Nodes:</b> ${["NodeA", "NodeB", "NodeC", "NodeD"].filter(n => n !== data.node).join(", ")}<br>
+<b>Verifying Nodes:</b> ${verifiers.join(", ")}<br>
 <b>Item ID:</b> ${data.record.id}<br>
 <b>Quantity:</b> ${data.record.qty}<br>
 <b>Price:</b> $${data.record.price}<br>
@@ -105,7 +161,6 @@
 <b>Record string before hashing:</b> ${data.record_string}<br>
 <b>SHA-256 Hash:</b> ${data.hash_int}<br>
 <b>Signature:</b> ${data.signature}<br>
-
 <hr>
 <b>Formulas:</b><br>
 φ(n) = (p - 1) × (q - 1) = (${data.p} - 1) × (${data.q} - 1) = ${data.phi}<br>
@@ -116,25 +171,31 @@ n = p × q = ${data.p} × ${data.q} = ${data.modulus_n}<br><br>
 signature^e mod n == hash<br>
 ${data.signature}^${data.public_e} mod ${data.modulus_n} = ${data.hash_int}<br>
 
- <b>Signer:</b> ${data.node}<br>
-<b>Verifying Nodes:</b> ${["NodeA", "NodeB", "NodeC", "NodeD"].filter(n => n !== data.node).join(", ")}<br
-
+<b>Signer:</b> ${data.node}<br>
+<b>Verifying Nodes:</b> ${verifiers.join(", ")}<br>
 
 <hr>
 <table border="1" cellpadding="5">
-  <thead><tr><th>Peer</th><th>Decrypted Hash (hex)</th><th>Original Hash (hex)</th><th>Match</th></tr></thead>
+  <thead>
+    <tr>
+      <th>Peer</th>
+      <th>Decrypted Hash (hex)</th>
+      <th>Original Hash (hex)</th>
+      <th>Match</th>
+    </tr>
+  </thead>
   <tbody>
     ${peerDetails}
   </tbody>
 </table>
-      `;
+        `;
 
-    } catch (err) {
-      out.innerHTML = `<span class="invalid">Fetch error: ${err.message}</span>`;
+      } catch (err) {
+        // Handle errors (e.g. server not running)
+        out.innerHTML = `<span class="invalid">Fetch error: ${err.message}</span>`;
+      }
     }
-  }
-</script>
-
+  </script>
 
 </body>
 </html>
