@@ -31,7 +31,7 @@ def run_consensus_bft(proposer, record_str, proposer_signature, verify_fn):
 
         decrypted = pow(proposer_signature, e, n)
         matched = (decrypted == h_int)
-
+        print(f"Verifier: {v}, decrypted Hash: {decrypted}, expected hash: {h_int}, matched: {matched}")
         verification_details[v] = {
             "expected_hash": str(h_int),
             "decrypted_signature": str(decrypted),
