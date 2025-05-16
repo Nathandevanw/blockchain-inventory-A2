@@ -86,10 +86,17 @@ def get_all_ids():
 # Step 2: PKG computes g = ID^d mod n for each warehouse
 def pkg_generate_g():
     ids = get_all_ids()
+    g_output = {}  # Collect g values here
+
     for w in warehouses:
         data = read_json(warehouse_files[w])
-        data["g"] = powmod(ids[w], d_pkg, n_pkg)
+        g_val = powmod(ids[w], d_pkg, n_pkg)
+        data["g"] = g_val
         write_json(warehouse_files[w], data)
+        g_output[w] = g_val  # Store for central file
+
+    # Save all g values to pkg_calculated_g.json
+    write_json("backend_part2/pkg_calculated_g.json", g_output)
 
 # Step 3: Each warehouse calculates tᵢ = r^e mod n
 def warehouse_t_sharing():
