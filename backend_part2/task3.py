@@ -208,7 +208,7 @@ def query_item():
         "decrypted_quantity": decrypted_m
     }
     write_json("backend_part2/encryption_result.json", encryption_result)
-    
+
     # Step 12: Signature verification (LHS = s_total^e, RHS = ∏ID * t_total^h)
     ids = get_all_ids()
     lhs = powmod(all_s_totals[0], e_pkg, n_pkg)
@@ -247,7 +247,7 @@ def query_item():
             "qty": encryption_result["Qty"],          # From saved encryption file
         },
         "itemId": item_id,
-        "encrypted_quantity":  decrypted_m,
+        "encrypted_quantity":  encryption_result["encrypted_quantity"],
         "decrypted_quantity": encryption_result["decrypted_quantity"],
         "consensus": consensus,    #  True if all warehouses agree on s_total
         "lhs": str(lhs),           # Left-hand side of signature verification
