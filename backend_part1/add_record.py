@@ -1,9 +1,12 @@
-import os, json
+import os
+import json
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from Crypto.Hash import SHA256
 from consensus import run_consensus_bft, VALIDATORS
 
+# This web application handles record signing and consensus for inventory management.
+# It loads node keys, signs records, verifies signatures, and stores agreed data.
 app = Flask(
     __name__,
     static_folder=os.path.join(os.path.dirname(__file__), '..', 'frontend'),
@@ -11,122 +14,133 @@ app = Flask(
 )
 CORS(app)
 
-# === Load RSA key for a given node ===
-def derive_keys(node):
+# Reads RSA key parameters from the given node's JSON file.
+def load_keys(node):
     path = os.path.join(os.path.dirname(__file__), f"{node}.json")
-    with open(path, encoding='utf-8-sig') as f:
-        key = json.load(f)
-
-    p = int(key["p"])
-    q = int(key["q"])
-    e = int(key["e"])
-    n = int(key["n"])
-    phi = int(key["phi(n)"])
-    d = int(key["d"])
-
+    with open(path, encoding='utf-8-sig') as file:
+        keys = json.load(file)
+    p = int(keys["p"])
+    q = int(keys["q"])
+    n = int(keys["n"])
+    e = int(keys["e"])
+    d = int(keys["d"])
+    phi = int(keys["phi(n)"])
     return n, e, d, p, q, phi
 
-# === RSA Sign ===
-def sign_record(node, rec_str):
-    n, e, d, p, q, phi = derive_keys(node)
-    h_bytes = SHA256.new(rec_str.encode()).digest()
-    h_int = int.from_bytes(h_bytes, 'big')
-    sig = pow(h_int, d, n)
-    return sig, h_int, n, d, e, p, q, phi
+# Signs a record string using SHA256 and RSA with the node’s private key.
+def sign_record(node, record_str):
+    n, e, d, p, q, phi = load_keys(node)
+    hashed = SHA256.new(record_str.encode()).digest()
+    hashed_int = int.from_bytes(hashed, byteorder='big')
+    signature = pow(hashed_int, d, n)
+    return signature, hashed_int, n, d, e, p, q, phi
 
-# === RSA Verify ===
-def verify_signature(node, rec_str, sig):
-    n, e, *_ = derive_keys(node)
-    h = SHA256.new(rec_str.encode()).digest()
-    return pow(sig, e, n) == int.from_bytes(h, 'big')
+# Verifies a given signature using the node's RSA public key.
+def verify_signature(node, record_str, signature):
+    n, e, *_ = load_keys(node)
+    expected_hash = SHA256.new(record_str.encode()).digest()
+    return pow(signature, e, n) == int.from_bytes(expected_hash, 'big')
 
-# === Ensure inventory data dir & files ===
-DATA_DIR = os.path.join(os.path.dirname(__file__), 'inventory_data')
-os.makedirs(DATA_DIR, exist_ok=True)
-for n in VALIDATORS:
-    p = os.path.join(DATA_DIR, f"{n}.json")
-    if not os.path.exists(p):
-        with open(p, 'w') as f:
+# Ensure inventory_data folder and individual node files exist
+inventory_path = os.path.join(os.path.dirname(__file__), 'inventory_data')
+os.makedirs(inventory_path, exist_ok=True)
+
+for node in VALIDATORS:
+    file_path = os.path.join(inventory_path, f"{node}.json")
+    if not os.path.exists(file_path):
+        with open(file_path, 'w') as f:
             json.dump([], f)
 
+# Serves the form-based frontend for manual record submission
 @app.route('/')
 def index():
     return send_from_directory(app.static_folder, 'add_record.html')
 
+# Receives a record from the frontend, signs it, runs consensus, and stores it
 @app.route('/add_record', methods=['POST'])
 def add_record():
-    data = request.json
+    data = request.get_json()
     node = data.get('node')
     record = data.get('record')
 
-    if node not in VALIDATORS or not record \
-       or any(k not in record for k in ('id', 'qty', 'price')):
-        return jsonify(error="Invalid input"), 400
+    # Validate the input data
+    if node not in VALIDATORS or not record or not all(k in record for k in ['id', 'qty', 'price']):
+        return jsonify(error="Missing or incorrect record details"), 400
 
-    rec_str = f"{record['id']}{record['qty']}{record['price']}{node}"
-    print("✅ rec_str used for hashing:", rec_str)
+    # Prepare a string representation of the record for hashing and signing
+    record_str = f"{record['id']}{record['qty']}{record['price']}{node}"
 
-    sig, h_int, n, d, e, p, q, phi = sign_record(node, rec_str)
+    # Create a digital signature for the record
+    signature, hash_int, n, d, e, p, q, phi = sign_record(node, record_str)
 
-    if not verify_signature(node, rec_str, sig):
-        return jsonify(error="Signature failed"), 500
+    # Check the signature before sending to consensus
+    if not verify_signature(node, record_str, signature):
+        return jsonify(error="Failed to verify signature"), 500
 
-    result = run_consensus_bft(node, rec_str, sig, verify_signature)
+    # Run the consensus protocol across all validator nodes
+    result = run_consensus_bft(node, record_str, signature, verify_signature)
+
     if not result["consensus"]:
-        return jsonify(
-            error="Consensus not reached",
-            prepare_votes=result["prepare_votes"],
-            commit_votes=result["commit_votes"],
-            consensus=False
-        ), 403
+        return jsonify({
+            "status": "rejected",
+            "error": "Consensus failed",
+            "prepare_votes": result["prepare_votes"],
+            "commit_votes": result["commit_votes"],
+            "consensus": False
+        }), 403
 
-    # Append record to each validator's inventory file
+    # Append the record to each node's local inventory
     for peer in VALIDATORS:
-        dbf = os.path.join(DATA_DIR, f"{peer}.json")
-        ledger = json.load(open(dbf))
-        ledger.append({
+        file_path = os.path.join(inventory_path, f"{peer}.json")
+        with open(file_path, 'r') as f:
+            records = json.load(f)
+
+        records.append({
             "id": record["id"],
             "qty": record["qty"],
             "price": record["price"],
             "location": node,
-            "signature": sig
+            "signature": signature
         })
-        with open(dbf, 'w') as f:
-            json.dump(ledger, f, indent=2)
 
-    # Append signature verification result to each node's file
+        with open(file_path, 'w') as f:
+            json.dump(records, f, indent=2)
+
+    # Log the verification results for transparency
     for peer in VALIDATORS:
-        log_entry = {
+        log = {
             "record_id": record["id"],
-            "signed_from": node,
-            "sign_value": str(sig),
+            "signed_by": node,
+            "signature": str(signature),
             "verified": result["verifications"][peer]
         }
-        peer_file = os.path.join(os.path.dirname(__file__), f"{peer}.json")
-        if os.path.exists(peer_file):
-            with open(peer_file, 'r+', encoding='utf-8') as f:
+
+        log_file = os.path.join(os.path.dirname(__file__), f"{peer}.json")
+        if os.path.exists(log_file):
+            with open(log_file, 'r+', encoding='utf-8') as f:
                 try:
-                    peer_data = json.load(f)
-                    if isinstance(peer_data, dict):
-                        peer_data.setdefault("verifications", []).append(log_entry)
-                    elif isinstance(peer_data, list):
-                        peer_data = {"records": peer_data, "verifications": [log_entry]}
+                    content = json.load(f)
+                    if isinstance(content, dict):
+                        content.setdefault("verifications", []).append(log)
+                    else:
+                        content = {"records": content, "verifications": [log]}
                 except json.JSONDecodeError:
-                    peer_data = {"verifications": [log_entry]}
+                    content = {"verifications": [log]}
                 f.seek(0)
-                json.dump(peer_data, f, indent=2)
+                json.dump(content, f, indent=2)
                 f.truncate()
 
+    # Return the complete result to the frontend
     return jsonify({
-        "status": "accepted",
-        "record_string": rec_str,
+        "status": "accepted" if result["consensus"] else "rejected",
+        "record_string": record_str,
         "consensus": True,
         "prepare_votes": result["prepare_votes"],
         "commit_votes": result["commit_votes"],
         "verifications": result["verifications"],
         "details": result["details"],
-        "signature": str(sig),
-        "hash_int": str(h_int),
+        "signature": str(signature),
+        "hash_int": str(hash_int),
         "modulus_n": str(n),
         "private_d": str(d),
         "public_e": str(e),
@@ -137,6 +151,7 @@ def add_record():
         "record": record
     })
 
+# Start the Flask app locally
 if __name__ == '__main__':
-    print(" Server running at: http://127.0.0.1:5000")
+    print("Flask server started at http://127.0.0.1:5000")
     app.run(debug=True, port=5000)

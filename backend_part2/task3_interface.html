@@ -3,127 +3,185 @@
 <head>
   <meta charset="UTF-8">
   <title>DLT Inventory Query - Task 3</title>
+
+  <!-- 
+    This block defines font style, spacing, background color, and how elements like buttons and tables will look. 
+  -->
   <style>
-    body { font-family: 'Segoe UI', sans-serif; padding: 2rem; background: #f8f8f8; color: #333; }
-    h2, h3 { color: #222; }
-    label, select, button { display: block; margin-top: 1rem; font-size: 1rem; }
-    table { margin-top: 1.5rem; border-collapse: collapse; width: 100%; font-size: 0.95rem; }
-    th, td { padding: 8px; border: 1px solid #ccc; text-align: center; }
-    th { background-color: #f0f0f0; }
-    pre { background: #eee; padding: 1rem; border-radius: 6px; white-space: pre-wrap; font-size: 0.85rem; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      padding: 2rem;
+      background: #f8f8f8;
+      color: #333;
+    }
+    h2, h3 {
+      color: #222;
+    }
+    label, select, button {
+      display: block;
+      margin-top: 1rem;
+      font-size: 1rem;
+    }
+    table {
+      margin-top: 1.5rem;
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.95rem;
+    }
+    th, td {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: center;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+    pre {
+      background: #eee;
+      padding: 1rem;
+      border-radius: 6px;
+      white-space: pre-wrap;
+      font-size: 0.85rem;
+    }
   </style>
 </head>
+
 <body>
   <h2>Task 3 - Secure DLT Inventory Query System</h2>
 
-  <label for="itemId">Select Item ID:</label>
+  <!-- 
+    This section allows the user to choose an item ID from a dropdown.
+    These IDs are sent to the backend server for verification and cryptographic processing.
+  -->
+  <label for="itemId">Select Item ID</label>
   <select id="itemId">
     <option value="001">Item 001</option>
     <option value="002">Item 002</option>
     <option value="003">Item 003</option>
     <option value="004">Item 004</option>
   </select>
+
+  <!-- 
+    This is the submit button.
+    When clicked, it triggers the backend query using the selected item ID.
+  -->
   <button id="queryButton" type="button">Submit Query</button>
 
+  <!-- 
+    This section is where the server response will be shown.
+    It includes cryptographic steps such as PKG key setup, signature generation, and officer verification.
+  -->
   <div id="output" style="margin-top:2rem;"></div>
 
+  <!-- 
+    JavaScript begins here. It listens for button clicks, sends data to the server, and displays the steps returned. 
+    Each line is commented to help explain what the code is doing.
+  -->
   <script>
     async function queryItem(event) {
+      // Prevents the page from refreshing when the button is clicked
       event.preventDefault();
+
+      // Get the selected item ID value from the dropdown menu
       const itemId = document.getElementById('itemId').value;
+
+      // Identify the output area on the page where results will be displayed
       const output = document.getElementById('output');
+
+      // Show a temporary message while waiting for the server response
       output.innerHTML = 'Please wait...';
 
       try {
+        // Send a POST request to the server running locally on port 5000
+        // The item ID is included in the request body in JSON format
         const res = await fetch('http://localhost:5000/query_item', {
           method: 'POST',
-          headers: {sdfor) { output.innerHTML = `<p style="color:red">${data.error}</p>`; return; }
-
-        let html = `<h3>Step 1: PKG key generation (p, q, n, phi, e, d)</h3>
-<pre>
-p = ${BigInt(data.pkg_keys.p).toString()}
-q = ${BigInt(data.pkg_keys.q).toString()}
-n = ${BigInt(data.pkg_keys.n).toString()}
-e = ${BigInt(data.pkg_keys.e).toString()}
-d = ${BigInt(data.pkg_keys.d).toString()}
-PKG Public Key = (e,n) = (${BigInt(data.pkg_keys.e).toString()}, ${BigInt(data.pkg_keys.n).toString()})
-PKG Private Key = (d,n) = (${BigInt(data.pkg_keys.d).toString()}, ${BigInt(data.pkg_keys.n).toString()})
-</pre>`;
-
-        html += `<h3>Step 2: Warehouses send IDs to PKG → PKG stores g only</h3>`;
-        data.warehouses.forEach(w => {
-          html += `
-<pre>
-Warehouse: ${w.warehouse}
-ID = ${w.ID}
-Random r = ${w.random}
-g = ID^d mod n = ${BigInt(w.g).toString()}
-</pre>`;
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_id: itemId })
         });
 
-        html += `<h3>Step 3: Warehouses calculate tᵢ and share</h3>`;
+        // Wait for the server to send back the full JSON result
+        const data = await res.json();
+
+        // If the server sends an error, display it in red
+        if (data.error) {
+          output.innerHTML = '<p style="color:red">' + data.error + '</p>';
+          return;
+        }
+
+        // Begin building the HTML result with step-by-step explanations
+        let html = '<h3>Step One - PKG Key Generation</h3><pre>';
+        html += 'p: ' + BigInt(data.pkg_keys.p) + '\n';
+        html += 'q: ' + BigInt(data.pkg_keys.q) + '\n';
+        html += 'n: ' + BigInt(data.pkg_keys.n) + '\n';
+        html += 'phi_n: ' + BigInt(data.phi_n) + '\n';
+        html += 'e: ' + BigInt(data.pkg_keys.e) + '\n';
+        html += 'd: ' + BigInt(data.pkg_keys.d) + '\n';
+        html += '</pre>';
+
+        // Show each warehouse's g value (calculated using its ID)
+        html += '<h3>Step Two - g Values Computed by PKG</h3>';
         data.warehouses.forEach(w => {
-          html += `
-<pre>
-Warehouse: ${w.warehouse}
-tᵢ = r^e mod n = ${BigInt(w.t_i).toString()}
-</pre>`;
+          html += '<pre>';
+          html += 'warehouse: ' + w.warehouse + '\n';
+          html += 'ID: ' + w.ID + '\n';
+          html += 'r: ' + w.random + '\n';
+          html += 'g: ' + BigInt(w.g) + '\n';
+          html += '</pre>';
         });
 
-        html += `<h3>Step 4: Warehouses calculate sᵢ partial signatures</h3>`;
+        // Show t values (each warehouse calculates tᵢ = r^e mod n)
+        html += '<h3>Step Three - t Values</h3>';
         data.warehouses.forEach(w => {
-          html += `
-<pre>
-Warehouse: ${w.warehouse}
-sᵢ = g × r^h mod n = ${BigInt(w.s_i).toString()}
-</pre>`;
+          html += '<pre>';
+          html += 't: ' + BigInt(w.t_i) + '\n';
+          html += '</pre>';
         });
 
-        html += `<h3>Step 5: All warehouses share sᵢ → each calculate s_total</h3>`;
+        // Show sᵢ values (each warehouse computes its partial signature)
+        html += '<h3>Step Four - Partial Signatures</h3>';
         data.warehouses.forEach(w => {
-          html += `
-<pre>
-Warehouse: ${w.warehouse}
-s_total = product of sᵢ mod n = ${BigInt(w.s_total).toString()}
-</pre>`;
+          html += '<pre>';
+          html += 's: ' + BigInt(w.s_i) + '\n';
+          html += '</pre>';
         });
 
-        html += `<h3>Step 6: All warehouses send s_total to PKG → PKG checks match</h3>
-<pre>
-Consensus Result: ${data.consensus ? "✅ PASSED (all match)" : "❌ FAILED (mismatch found)"}
-</pre>`;
+        // Show the combined signature result s_total from all warehouses
+        html += '<h3>Step Five - Final Signature (s_total)</h3>';
+        data.warehouses.forEach(w => {
+          html += '<pre>';
+          html += 's_total: ' + BigInt(w.s_total) + '\n';
+          html += '</pre>';
+        });
 
-  html += `<h3>Step 7: PKG encrypts m using Officer’s public key → Officer decrypts and verifies signature</h3>
-<pre>
-Item ID: ${data.itemId}
-Quantity: ${data.item.qty}
-Price: ${data.item.price}
-Location: ${data.item.location}
+        // Indicate whether all warehouses agreed on the same s_total
+        html += '<h3>Step Six - Consensus Check</h3><pre>';
+        html += 'consensus: ' + (data.consensus ? 'all s_total values match' : 'mismatch found') + '\n';
+        html += '</pre>';
 
-Officer Public Key:
-(e_po, n_po) = (${BigInt(data.po_keys.e).toString()}, ${BigInt(data.po_keys.n).toString()})
-Officer Private Key:
-(d_po, n_po) = (${BigInt(data.po_keys.d).toString()}, ${BigInt(data.po_keys.n).toString()})
+        // Show encryption and decryption done by officer and verify signature
+        html += '<h3>Step Seven - Officer Decryption and Signature Verification</h3><pre>';
+        html += 'item_id: ' + data.itemId + '\n';
+        html += 'qty: ' + data.item.qty + '\n';
+        html += 'price: ' + data.item.price + '\n';
+        html += 'location: ' + data.item.location + '\n\n';
+        html += 'encrypted_qty: ' + BigInt(data.encrypted_quantity) + '\n';
+        html += 'decrypted_qty: ' + BigInt(data.decrypted_quantity) + '\n\n';
+        html += 'lhs: ' + BigInt(data.lhs) + '\n';
+        html += 'rhs: ' + BigInt(data.rhs) + '\n';
+        html += 'signature valid: ' + (data.valid ? 'yes' : 'no') + '\n';
+        html += '</pre>';
 
-PKG encrypts quantity for Officer:
-C = qty^e_po mod n_po → C = ${BigInt(data.encrypted_quantity).toString()}
-
-Officer decrypts:
-M = C^d_po mod n_po → M = ${BigInt(data.decrypted_quantity).toString()}
-
-Officer verifies signature:
-LHS = s^e mod n = ${BigInt(data.lhs).toString()}
-RHS = product(IDs) × t_total^h mod n = ${BigInt(data.rhs).toString()}
-Signature Valid: ${data.valid ? "✅ VALID" : "❌ INVALID"}
-</pre>`;
-
+        // Show the final output in the page's output section
         output.innerHTML = html;
 
       } catch (err) {
-        output.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
+        // Catch any network errors or server failures and show a message
+        output.innerHTML = '<p style="color:red">There was an error contacting the server. Please try again later.</p>';
       }
     }
 
+    // Attach the click event to the query button
     document.getElementById('queryButton').addEventListener('click', queryItem);
   </script>
 </body>

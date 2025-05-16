@@ -13,7 +13,7 @@
   </style>
 </head>
 <body>
-  <h1>📦 Task 1 – Add New Inventory Record</h1>
+<h1>Task 1 and Task 2 – Add Inventory Record with Digital Signature and Consensus Verification</h1>
 
   <label>Select Inventory Node:</label>
 <select id="node">
@@ -93,6 +93,7 @@
 <b>Item ID:</b> ${data.record.id}<br>
 <b>Quantity:</b> ${data.record.qty}<br>
 <b>Price:</b> $${data.record.price}<br>
+<b>Record stored in:</b> Inventory ${data.node.slice(-1)}<br>
 
 <hr>
 <b>p:</b> ${data.p}<br>
@@ -115,8 +116,8 @@ n = p × q = ${data.p} × ${data.q} = ${data.modulus_n}<br><br>
 signature^e mod n == hash<br>
 ${data.signature}^${data.public_e} mod ${data.modulus_n} = ${data.hash_int}<br>
 
-<b>Signer:</b> NodeB<br>
-<b>Verifying Nodes:</b> NodeA, NodeC, NodeD<br>
+ <b>Signer:</b> ${data.node}<br>
+<b>Verifying Nodes:</b> ${["NodeA", "NodeB", "NodeC", "NodeD"].filter(n => n !== data.node).join(", ")}<br
 
 
 <hr>

@@ -31,4 +31,3 @@ for name in VALIDATORS:
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(new_key, f, indent=2)
 
-    print(f" Updated {name}.json with n, phi, d at the top")
