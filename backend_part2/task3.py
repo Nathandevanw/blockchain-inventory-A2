@@ -249,7 +249,7 @@ def query_item():
             "qty": encryption_result["Qty"],          # From saved encryption file
         },
         "itemId": item_id,
-        "encrypted_quantity": encryption_result["encrypted_quantity"],
+        "encrypted_quantity":  decrypted_m,
         "decrypted_quantity": encryption_result["decrypted_quantity"],
         "consensus": consensus,    #  True if all warehouses agree on s_total
         "lhs": str(lhs),           # Left-hand side of signature verification
