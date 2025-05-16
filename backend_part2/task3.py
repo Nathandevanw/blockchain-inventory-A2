@@ -144,15 +144,15 @@ def query_item():
     location = None     #  store the node (e.g., NodeA)
 
     # Step 2: Search for the item across all inventory nodes
-    for w, node_data in inventories.items():
-        for item in node_data:
+    for w in warehouses:
+        node = read_json(f"backend_part1/inventory_data/Node{w[-1]}.json")
+        for item in node:
             if item["id"] == item_id:
                 found = item
-                location = w.replace("Inventory_", "Node")
-            break
+                location = f"Node{w[-1]}"  # e.g., NodeA, NodeB
+                break
         if found:
             break
-
 
     # Step 3: Run Step 1 of Harn Protocol – generate g values from warehouse IDs
     pkg_generate_g()
@@ -247,7 +247,6 @@ def query_item():
         "phi_n": pkg_keys["phi_n"],
         "item": {
             "qty": encryption_result["Qty"],          # From saved encryption file
-            "location": location,                     # From NodeX where item was found
         },
         "itemId": item_id,
         "encrypted_quantity": encryption_result["encrypted_quantity"],
