@@ -141,7 +141,6 @@ def query_item():
     # Step 1: Extract item ID from request JSON
     item_id = request.json.get("item_id")
     found = None        #  store the matched item
-    location = None     #  store the node (e.g., NodeA)
 
     # Step 2: Search for the item across all inventory nodes
     for w in warehouses:
@@ -149,7 +148,6 @@ def query_item():
         for item in node:
             if item["id"] == item_id:
                 found = item
-                location = f"Node{w[-1]}"  # e.g., NodeA, NodeB
                 break
         if found:
             break
@@ -210,7 +208,7 @@ def query_item():
         "decrypted_quantity": decrypted_m
     }
     write_json("backend_part2/encryption_result.json", encryption_result)
-
+    
     # Step 12: Signature verification (LHS = s_total^e, RHS = ∏ID * t_total^h)
     ids = get_all_ids()
     lhs = powmod(all_s_totals[0], e_pkg, n_pkg)
