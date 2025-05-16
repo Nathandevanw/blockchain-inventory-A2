@@ -15,7 +15,7 @@ app = Flask(
 CORS(app)
 
 # Reads RSA key parameters from the given node's JSON file.
-def load_keys(node):
+def loadkeys(node):
     path = os.path.join(os.path.dirname(__file__), f"{node}.json")
     with open(path, encoding='utf-8-sig') as file:
         keys = json.load(file)
@@ -28,16 +28,16 @@ def load_keys(node):
     return n, e, d, p, q, phi
 
 # Signs a record string using SHA256 and RSA with the node’s private key.
-def sign_record(node, record_str):
-    n, e, d, p, q, phi = load_keys(node)
+def signrecord(node, record_str):
+    n, e, d, p, q, phi = loadkeys(node)
     hashed = SHA256.new(record_str.encode()).digest()
     hashed_int = int.from_bytes(hashed, byteorder='big')
     signature = pow(hashed_int, d, n)
     return signature, hashed_int, n, d, e, p, q, phi
 
 # Verifies a given signature using the node's RSA public key.
-def verify_signature(node, record_str, signature):
-    n, e, *_ = load_keys(node)
+def verifysignature(node, record_str, signature):
+    n, e, *_ = loadkeys(node)
     expected_hash = SHA256.new(record_str.encode()).digest()
     return pow(signature, e, n) == int.from_bytes(expected_hash, 'big')
 
@@ -71,14 +71,14 @@ def add_record():
     record_str = f"{record['id']}{record['qty']}{record['price']}{node}"
 
     # Create a digital signature for the record
-    signature, hash_int, n, d, e, p, q, phi = sign_record(node, record_str)
+    signature, hash_int, n, d, e, p, q, phi = signrecord(node, record_str)
 
     # Check the signature before sending to consensus
-    if not verify_signature(node, record_str, signature):
+    if not verifysignature(node, record_str, signature):
         return jsonify(error="Failed to verify signature"), 500
 
     # Run the consensus protocol across all validator nodes
-    result = run_consensus_bft(node, record_str, signature, verify_signature)
+    result = run_consensus_bft(node, record_str, signature, verifysignature)
 
     if not result["consensus"]:
         return jsonify({
